@@ -2,20 +2,24 @@ import os
 import json
 import hashlib
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-# Конфигурация
+# === Configuration ===
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 CONFIG_FILE = "config.json"
 CACHE_FILE = "last_hash.txt"
+MESSAGES_FILE = "message_ids.json"
+
+# Kyiv timezone UTC+2
+KYIV_TZ = timezone(timedelta(hours=2))
 
 # URLs
 GITHUB_DATA_URL = "https://raw.githubusercontent.com/Baskerville42/outage-data-ua/main/data/{region}.json"
 YASNO_API_URL = "https://app.yasno.ua/api/blackout-service/public/shutdowns/regions/{region_id}/dsos/{dso_id}/planned-outages"
 
-# Названия дней недели
+# Days of week (Ukrainian)
 DAYS_UA = {
     0: "Понеділок",
     1: "Вівторок",
@@ -26,13 +30,13 @@ DAYS_UA = {
     6: "Неділя"
 }
 
-# Названия источников
 SOURCE_GITHUB = "outage-data-ua"
-SOURCE_YASNO = "app.yasno.ua"
+SOURCE_YASNO = "yasno"
+MAX_MESSAGES = 3
 
 
 def load_config() -> dict:
-    """Загружаем конфигурацию"""
+    """Load configuration from file"""
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -45,8 +49,13 @@ def load_config() -> dict:
         }
 
 
+def get_kyiv_now() -> datetime:
+    """Get current time in Kyiv timezone"""
+    return datetime.now(KYIV_TZ)
+
+
 def format_hours(hours: float) -> str:
-    """Склонение слова 'година'"""
+    """Format hours with proper Ukrainian declension"""
     if hours == int(hours):
         hours = int(hours)
     
@@ -62,76 +71,84 @@ def format_hours(hours: float) -> str:
 
 
 def format_time(minutes: int) -> str:
-    """Конвертирует минуты в строку времени"""
+    """Convert minutes to HH:MM string"""
     hours = minutes // 60
     mins = minutes % 60
-    
     if hours == 24:
         return "24:00"
-    
     return f"{hours:02d}:{mins:02d}"
 
 
 def format_slot_time(slot: int) -> str:
-    """Конвертирует номер слота (0-48) во время"""
+    """Convert slot index (0-48) to time string"""
     return format_time(slot * 30)
 
 
-# ==================== GITHUB DATA SOURCE ====================
+# === Data fetching ===
 
 def fetch_github_data(region: str) -> Optional[dict]:
-    """Получаем данные из GitHub репозитория"""
+    """Fetch data from GitHub repository"""
     try:
         url = GITHUB_DATA_URL.format(region=region)
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Помилка отримання даних з GitHub: {e}")
+        print(f"GitHub fetch error: {e}")
         return None
 
 
+def fetch_yasno_data(region_id: str, dso_id: str) -> Optional[dict]:
+    """Fetch data from Yasno API"""
+    try:
+        url = YASNO_API_URL.format(region_id=region_id, dso_id=dso_id)
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Yasno API fetch error: {e}")
+        return None
+
+
+# === GitHub data parsing ===
+
+def is_all_yes(day_data: dict) -> bool:
+    """Check if all hours have 'yes' status (schedule pending)"""
+    for hour in range(1, 25):
+        if day_data.get(str(hour), "yes") != "yes":
+            return False
+    return True
+
+
 def parse_github_day(day_data: dict) -> list[bool]:
-    """
-    Парсим данные дня из GitHub в массив 48 получасовых слотов.
-    True = свет есть, False = света нет
-    """
+    """Parse GitHub day data into 48 half-hour slots (True = power on)"""
     slots = []
     
     for hour in range(1, 25):
-        hour_key = str(hour)
-        status = day_data.get(hour_key, "yes")
+        status = day_data.get(str(hour), "yes")
         
         if status == "yes":
-            first_half = True
-            second_half = True
+            first_half, second_half = True, True
         elif status == "no":
-            first_half = False
-            second_half = False
+            first_half, second_half = False, False
         elif status == "first":
-            first_half = False
-            second_half = True
+            first_half, second_half = False, True
         elif status == "second":
-            first_half = True
-            second_half = False
-        elif status in ["maybe", "mfirst", "msecond"]:
-            first_half = True
-            second_half = True
-        else:
-            first_half = True
-            second_half = True
+            first_half, second_half = True, False
+        else:  # maybe, mfirst, msecond
+            first_half, second_half = True, True
         
-        slots.append(first_half)
-        slots.append(second_half)
+        slots.extend([first_half, second_half])
     
     return slots
 
 
 def extract_github_schedules(data: dict, groups: list[str]) -> dict:
-    """
-    Извлекаем расписания из GitHub данных.
-    Возвращает: {group: {date_str: [48 slots]}}
-    """
+    """Extract schedules from GitHub data"""
     result = {}
     fact_data = data.get("fact", {}).get("data", {})
     
@@ -148,75 +165,61 @@ def extract_github_schedules(data: dict, groups: list[str]) -> dict:
             if not day_data:
                 continue
             
-            date = datetime.fromtimestamp(int(day_ts))
+            # Convert timestamp to Kyiv time
+            date = datetime.fromtimestamp(int(day_ts), tz=KYIV_TZ)
             date_str = date.strftime("%Y-%m-%d")
             
-            slots = parse_github_day(day_data)
-            result[group][date_str] = {
-                "slots": slots,
-                "date": date
-            }
+            # Check for "pending" status
+            if is_all_yes(day_data):
+                result[group][date_str] = {
+                    "slots": None,
+                    "date": date,
+                    "status": "pending"
+                }
+            else:
+                slots = parse_github_day(day_data)
+                result[group][date_str] = {
+                    "slots": slots,
+                    "date": date,
+                    "status": "normal"
+                }
     
     return result
 
 
-# ==================== YASNO API SOURCE ====================
+# === Yasno API parsing ===
 
-def fetch_yasno_data(region_id: str, dso_id: str) -> Optional[dict]:
-    """Получаем данные из Yasno API"""
-    try:
-        url = YASNO_API_URL.format(region_id=region_id, dso_id=dso_id)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json"
-        }
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"Помилка отримання даних з Yasno API: {e}")
-        return None
-
-
-def parse_yasno_day(day_data: dict) -> list[bool]:
-    """
-    Парсим данные дня из Yasno API в массив 48 получасовых слотов.
-    True = свет есть (NotPlanned), False = света нет (Definite)
-    """
-    slots = [True] * 48  # По умолчанию свет есть
+def parse_yasno_day(day_data: dict) -> tuple[Optional[list[bool]], str]:
+    """Parse Yasno day data. Returns (slots, status)"""
+    status = day_data.get("status", "")
     
-    if not day_data or "slots" not in day_data:
-        return slots
+    if status == "EmergencyShutdowns":
+        return None, "emergency"
+    
+    if not day_data.get("slots"):
+        return None, "pending"
+    
+    slots = [True] * 48
     
     for slot in day_data["slots"]:
-        start_min = slot.get("start", 0)
-        end_min = slot.get("end", 0)
-        slot_type = slot.get("type", "NotPlanned")
-        
-        # Конвертируем минуты в индексы получасовых слотов
-        start_idx = start_min // 30
-        end_idx = end_min // 30
-        
-        is_on = (slot_type == "NotPlanned")
+        start_idx = slot.get("start", 0) // 30
+        end_idx = slot.get("end", 0) // 30
+        is_on = (slot.get("type") == "NotPlanned")
         
         for i in range(start_idx, min(end_idx, 48)):
             slots[i] = is_on
     
-    return slots
+    return slots, "normal"
 
 
 def extract_yasno_schedules(data: dict, groups: list[str]) -> dict:
-    """
-    Извлекаем расписания из Yasno API данных.
-    Возвращает: {group: {date_str: [48 slots]}}
-    """
+    """Extract schedules from Yasno API data"""
     result = {}
     
     if not data:
         return result
     
     for group in groups:
-        # Убираем GPV префикс для поиска в Yasno данных
         group_key = group.replace("GPV", "")
         
         if group_key not in data:
@@ -230,24 +233,25 @@ def extract_yasno_schedules(data: dict, groups: list[str]) -> dict:
             if not day_data or "date" not in day_data:
                 continue
             
-            # Парсим дату
+            # Parse date with Kyiv timezone
             date_str_full = day_data["date"]
-            date = datetime.fromisoformat(date_str_full.replace("+02:00", "+00:00").replace("+00:00", ""))
+            date = datetime.fromisoformat(date_str_full)
             date_str = date.strftime("%Y-%m-%d")
             
-            slots = parse_yasno_day(day_data)
+            slots, status = parse_yasno_day(day_data)
             result[group][date_str] = {
                 "slots": slots,
-                "date": date
+                "date": date,
+                "status": status
             }
     
     return result
 
 
-# ==================== SCHEDULE COMPARISON ====================
+# === Schedule processing ===
 
 def slots_to_periods(slots: list[bool]) -> list[dict]:
-    """Конвертируем массив слотов в список периодов"""
+    """Convert slot array to list of periods"""
     if not slots:
         return []
     
@@ -267,7 +271,6 @@ def slots_to_periods(slots: list[bool]) -> list[dict]:
             current_status = slots[i]
             start_slot = i
     
-    # Последний период
     hours = (len(slots) - start_slot) * 0.5
     periods.append({
         "start": format_slot_time(start_slot),
@@ -280,36 +283,46 @@ def slots_to_periods(slots: list[bool]) -> list[dict]:
 
 
 def schedules_match(slots1: list[bool], slots2: list[bool]) -> bool:
-    """Проверяем, совпадают ли два расписания"""
-    if len(slots1) != len(slots2):
+    """Check if two schedules are identical"""
+    if not slots1 or not slots2:
         return False
     return slots1 == slots2
 
 
-# ==================== MESSAGE FORMATTING ====================
+# === Message formatting ===
 
-def format_schedule_message(periods: list[dict], date: datetime, sources: list[str]) -> str:
-    """Форматируем сообщение для одного дня"""
+def format_schedule_message(
+    periods: list[dict],
+    date: datetime,
+    sources: list[str],
+    special_status: Optional[str] = None
+) -> str:
+    """Format schedule message for one day"""
     day_name = DAYS_UA[date.weekday()]
     date_str = date.strftime("%d.%m")
     sources_str = ", ".join(sources)
     
-    lines = [f"🗓 Графік відключень на {date_str} ({day_name}) [{sources_str}]:"]
+    lines = [f"📆 Графік відключень на {date_str} ({day_name}) [{sources_str}]:"]
     lines.append("")
+    
+    # Handle special statuses
+    if special_status == "emergency":
+        lines.append("🚨 АВАРІЙНЕ ВІДКЛЮЧЕННЯ!")
+        return "\n".join(lines)
+    
+    if special_status == "pending":
+        lines.append("⏳ Очікується інформація про графік")
+        return "\n".join(lines)
     
     total_on = 0.0
     total_off = 0.0
     
     for period in periods:
-        emoji = "🔋" if period["is_on"] else "🪫"
+        emoji = "🟩" if period["is_on"] else "🟠"
+        time_range = f"<code>{period['start']} - {period['end']}</code>"
         hours_text = format_hours(period["hours"])
         
-        if period["is_on"]:
-            status_text = f"({hours_text} Світло є)"
-        else:
-            status_text = f"(Світла нема {hours_text})"
-        
-        lines.append(f"{emoji}{period['start']} - {period['end']} {status_text}")
+        lines.append(f"{emoji} {time_range} … ({hours_text})")
         
         if period["is_on"]:
             total_on += period["hours"]
@@ -317,8 +330,8 @@ def format_schedule_message(periods: list[dict], date: datetime, sources: list[s
             total_off += period["hours"]
     
     lines.append("")
-    lines.append(f"Світло є {format_hours(total_on)}")
-    lines.append(f"Світла нема {format_hours(total_off)}")
+    lines.append(f"🟩 Світло є: {format_hours(total_on)}")
+    lines.append(f"🟠 Світла нема: {format_hours(total_off)}")
     
     return "\n".join(lines)
 
@@ -328,12 +341,10 @@ def format_group_message(
     github_schedules: dict,
     yasno_schedules: dict
 ) -> Optional[str]:
-    """Форматируем сообщение для одной группы"""
-    
+    """Format message for one group"""
     group_num = group.replace("GPV", "")
     header = f"============ група {group_num} ============"
     
-    # Собираем все даты
     all_dates = set()
     if group in github_schedules:
         all_dates.update(github_schedules[group].keys())
@@ -343,7 +354,7 @@ def format_group_message(
     if not all_dates:
         return None
     
-    sorted_dates = sorted(all_dates)[:2]  # Только два дня
+    sorted_dates = sorted(all_dates)[:2]
     day_messages = []
     
     for date_str in sorted_dates:
@@ -352,37 +363,36 @@ def format_group_message(
         
         github_slots = github_data["slots"] if github_data else None
         yasno_slots = yasno_data["slots"] if yasno_data else None
-        date = github_data["date"] if github_data else yasno_data["date"]
+        github_status = github_data["status"] if github_data else None
+        yasno_status = yasno_data["status"] if yasno_data else None
         
-        if github_slots and yasno_slots:
-            # Оба источника есть - сравниваем
-            if schedules_match(github_slots, yasno_slots):
-                # Данные совпадают - один блок с обоими источниками
-                periods = slots_to_periods(github_slots)
-                msg = format_schedule_message(periods, date, [SOURCE_GITHUB, SOURCE_YASNO])
-                day_messages.append(msg)
-            else:
-                # Данные НЕ совпадают - два отдельных блока
-                github_periods = slots_to_periods(github_slots)
-                yasno_periods = slots_to_periods(yasno_slots)
-                
-                msg1 = format_schedule_message(github_periods, date, [SOURCE_GITHUB])
-                msg2 = format_schedule_message(yasno_periods, date, [SOURCE_YASNO])
-                
-                day_messages.append(msg1)
-                day_messages.append(msg2)
+        date = (github_data or yasno_data)["date"]
         
-        elif github_slots:
-            # Только GitHub
+        # Priority: emergency > normal > pending
+        if yasno_status == "emergency":
+            msg = format_schedule_message([], date, [SOURCE_YASNO], "emergency")
+            day_messages.append(msg)
+        elif github_slots and yasno_slots and schedules_match(github_slots, yasno_slots):
             periods = slots_to_periods(github_slots)
-            msg = format_schedule_message(periods, date, [SOURCE_GITHUB])
+            msg = format_schedule_message(periods, date, [SOURCE_GITHUB, SOURCE_YASNO])
             day_messages.append(msg)
-        
-        elif yasno_slots:
-            # Только Yasno
-            periods = slots_to_periods(yasno_slots)
-            msg = format_schedule_message(periods, date, [SOURCE_YASNO])
-            day_messages.append(msg)
+        else:
+            # Different data - show both
+            if github_slots:
+                periods = slots_to_periods(github_slots)
+                msg = format_schedule_message(periods, date, [SOURCE_GITHUB])
+                day_messages.append(msg)
+            elif github_status == "pending":
+                msg = format_schedule_message([], date, [SOURCE_GITHUB], "pending")
+                day_messages.append(msg)
+            
+            if yasno_slots:
+                periods = slots_to_periods(yasno_slots)
+                msg = format_schedule_message(periods, date, [SOURCE_YASNO])
+                day_messages.append(msg)
+            elif yasno_status == "pending" and github_status != "pending":
+                msg = format_schedule_message([], date, [SOURCE_YASNO], "pending")
+                day_messages.append(msg)
     
     if not day_messages:
         return None
@@ -396,8 +406,7 @@ def format_full_message(
     yasno_schedules: dict,
     groups: list[str]
 ) -> Optional[str]:
-    """Формируем полное сообщение"""
-    
+    """Format complete message for all groups"""
     all_group_messages = []
     
     for group in groups:
@@ -408,13 +417,18 @@ def format_full_message(
     if not all_group_messages:
         return None
     
-    return "\n\n\n".join(all_group_messages)
+    # Add update time
+    now = get_kyiv_now()
+    update_time = now.strftime("%d.%m.%Y %H:%M")
+    footer = f"\n\n🕐 Оновлено: {update_time} (Київ)"
+    
+    return "\n\n\n".join(all_group_messages) + footer
 
 
-# ==================== CACHING ====================
+# === Caching ===
 
 def compute_combined_hash(github_data: Optional[dict], yasno_data: Optional[dict]) -> str:
-    """Вычисляем хеш от комбинированных данных"""
+    """Compute hash from combined data"""
     combined = {
         "github": github_data.get("meta", {}).get("contentHash", "") if github_data else "",
         "yasno": json.dumps(yasno_data, sort_keys=True) if yasno_data else ""
@@ -423,7 +437,7 @@ def compute_combined_hash(github_data: Optional[dict], yasno_data: Optional[dict
 
 
 def get_cached_hash() -> Optional[str]:
-    """Получаем сохраненный хеш"""
+    """Get cached hash"""
     try:
         with open(CACHE_FILE, "r") as f:
             return f.read().strip()
@@ -432,60 +446,134 @@ def get_cached_hash() -> Optional[str]:
 
 
 def save_hash(hash_value: str):
-    """Сохраняем хеш"""
+    """Save hash to file"""
     with open(CACHE_FILE, "w") as f:
         f.write(hash_value)
 
 
-# ==================== TELEGRAM ====================
+# === Message ID management ===
 
-def send_telegram_message(message: str) -> bool:
-    """Отправляем сообщение в Telegram"""
+def load_message_ids() -> list[int]:
+    """Load stored message IDs"""
+    try:
+        with open(MESSAGES_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_message_ids(ids: list[int]):
+    """Save message IDs to file"""
+    with open(MESSAGES_FILE, "w") as f:
+        json.dump(ids, f)
+
+
+# === Telegram API ===
+
+def send_telegram_message(message: str) -> Optional[int]:
+    """Send message to Telegram, return message ID"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID:
         print("Telegram credentials not configured")
-        return False
+        return None
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
-    max_length = 4000
+    payload = {
+        "chat_id": TELEGRAM_CHANNEL_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
     
-    if len(message) <= max_length:
-        parts = [message]
-    else:
-        parts = message.split("\n\n\n")
-    
-    for part in parts:
-        payload = {
-            "chat_id": TELEGRAM_CHANNEL_ID,
-            "text": part
-        }
-        
-        try:
-            response = requests.post(url, json=payload, timeout=30)
-            response.raise_for_status()
-            print("Повідомлення відправлено успішно")
-        except Exception as e:
-            print(f"Помилка відправки: {e}")
-            return False
-    
-    return True
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        message_id = result.get("result", {}).get("message_id")
+        print(f"Message sent, ID: {message_id}")
+        return message_id
+    except Exception as e:
+        print(f"Send error: {e}")
+        return None
 
 
-# ==================== MAIN ====================
+def pin_message(message_id: int) -> bool:
+    """Pin message in channel"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID:
+        return False
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/pinChatMessage"
+    
+    payload = {
+        "chat_id": TELEGRAM_CHANNEL_ID,
+        "message_id": message_id,
+        "disable_notification": True
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        print(f"Message {message_id} pinned")
+        return True
+    except Exception as e:
+        print(f"Pin error: {e}")
+        return False
+
+
+def delete_message(message_id: int) -> bool:
+    """Delete message from channel"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID:
+        return False
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+    
+    payload = {
+        "chat_id": TELEGRAM_CHANNEL_ID,
+        "message_id": message_id
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        print(f"Message {message_id} deleted")
+        return True
+    except Exception as e:
+        print(f"Delete error: {e}")
+        return False
+
+
+def manage_messages(new_message_id: int):
+    """Pin new message, delete old ones if > MAX_MESSAGES"""
+    message_ids = load_message_ids()
+    
+    # Pin new message
+    pin_message(new_message_id)
+    
+    # Add new ID to list
+    message_ids.append(new_message_id)
+    
+    # Delete old messages if exceeds limit
+    while len(message_ids) > MAX_MESSAGES:
+        old_id = message_ids.pop(0)
+        delete_message(old_id)
+    
+    save_message_ids(message_ids)
+    print(f"Active messages: {message_ids}")
+
+
+# === Main ===
 
 def main():
-    # Загружаем конфигурацию
     config = load_config()
     groups = config.get("groups", ["GPV12.1", "GPV18.1"])
     region = config.get("region", "kyiv")
     yasno_region_id = config.get("yasno_region_id", "25")
     yasno_dso_id = config.get("yasno_dso_id", "902")
     
-    print(f"Регіон: {region}")
-    print(f"Групи: {', '.join(groups)}")
-    print(f"Yasno: region={yasno_region_id}, dso={yasno_dso_id}")
+    print(f"Region: {region}")
+    print(f"Groups: {', '.join(groups)}")
+    print(f"Kyiv time: {get_kyiv_now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Получаем данные из обоих источников
+    # Fetch data from both sources
     print("\nFetching GitHub data...")
     github_data = fetch_github_data(region)
     
@@ -496,7 +584,7 @@ def main():
         print("Failed to fetch data from both sources")
         return
     
-    # Проверяем обновления
+    # Check for updates
     combined_hash = compute_combined_hash(github_data, yasno_data)
     cached_hash = get_cached_hash()
     
@@ -506,14 +594,11 @@ def main():
     
     print(f"New data detected! Hash: {combined_hash[:16]}...")
     
-    # Извлекаем расписания
+    # Extract schedules
     github_schedules = extract_github_schedules(github_data, groups) if github_data else {}
     yasno_schedules = extract_yasno_schedules(yasno_data, groups) if yasno_data else {}
     
-    print(f"\nGitHub groups: {list(github_schedules.keys())}")
-    print(f"Yasno groups: {list(yasno_schedules.keys())}")
-    
-    # Форматируем сообщение
+    # Format message
     message = format_full_message(github_schedules, yasno_schedules, groups)
     
     if not message:
@@ -525,8 +610,11 @@ def main():
     print(message)
     print("-" * 50)
     
-    # Отправляем в Telegram
-    if send_telegram_message(message):
+    # Send to Telegram
+    message_id = send_telegram_message(message)
+    
+    if message_id:
+        manage_messages(message_id)
         save_hash(combined_hash)
         print("Hash saved")
     else:
