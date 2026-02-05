@@ -139,7 +139,9 @@ Prerequisites
     *   Check Action logs for errors (installation, missing env, network).
 
 </details>
+
 ---
+
 Аби дізнатися про код детально, дивіться файл налаштувань (config.json) на читійте коментарі.
 
 ##### Структура та призначення файлів у репозиторії
