@@ -12,7 +12,7 @@ from urllib.parse import urlparse, parse_qs
 # --- Configuration ---
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
-PORT = 8888
+PORT = 8889
 # SECRET_KEY handled in state
 STATE_FILE = "power_monitor_state.json"
 SCHEDULE_FILE = "last_schedules.json"
@@ -27,7 +27,7 @@ state = {
     "secret_key": None
 }
 
-state_lock = threading.Lock()
+state_lock = threading.RLock()
 
 def load_state():
     global state
@@ -227,6 +227,7 @@ if __name__ == "__main__":
     monitor_thread.start()
     
     # Start HTTP Server
+    socketserver.TCPServer.allow_reuse_address = True
     server = socketserver.TCPServer(("", PORT), RequestHandler)
     try:
         server.serve_forever()
