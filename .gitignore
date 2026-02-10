@@ -1,0 +1,9 @@
+venv/
+*.log
+*.bak
+*.state
+__pycache__/
+run_light_monitor.sh
+power_monitor_state.json
+power_push_url.txt
+.env

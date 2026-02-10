@@ -30,12 +30,12 @@ DAYS_UA = {
 }
 
 # Separators
-SEP_SOURCE = "✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧"
-SEP_DAY = "■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■"
+SEP_SOURCE = "✧  ✧  ✧"
+SEP_DAY = "■  ■  ■"
 
-SOURCE_GITHUB = "GitHub-ДТЕК"
-SOURCE_YASNO = "yasno"
-MAX_MESSAGES = 3
+SOURCE_GITHUB = "ДТЕК"
+SOURCE_YASNO = "Yasno"
+MAX_MESSAGES = 1
 
 
 def load_config() -> dict:
@@ -362,8 +362,8 @@ def format_schedule_message(
     total_off = 0.0
     
     for period in periods:
-        emoji = "☑️" if period["is_on"] else "✖️"
-        time_range = f"<code>{period['start']} - {period['end']}</code>"
+        emoji = "🔆" if period["is_on"] else "✖️"
+        time_range = f"{period['start']} - {period['end']}"
         hours_text = format_hours(period["hours"])
         
         lines.append(f"{emoji} {time_range} … ({hours_text})")
@@ -374,7 +374,7 @@ def format_schedule_message(
             total_off += period["hours"]
     
     lines.append("")
-    lines.append(f"☑️ Світло є: {format_hours(total_on)}")
+    lines.append(f"🔆 Світло є: {format_hours(total_on)}")
     lines.append(f"✖️ Світла нема: {format_hours(total_off)}")
     
     return "\n".join(lines)
@@ -406,7 +406,7 @@ def format_group_message(
 ) -> Optional[str]:
     """Format message for one group - always show both sources if they differ"""
     group_num = group.replace("GPV", "")
-    header = f"============ ◉ <b>{group_num}</b> ◉ ============"
+    header = f"== ◉ група: <b>{group_num}</b> ◉ =="
     
     # Collect all dates from both sources
     all_dates = set()
@@ -482,7 +482,7 @@ def format_group_message(
     
     # Join different days with day separator
     days_text = f"\n\n{SEP_DAY}\n".join(day_blocks)
-    return f"{header}\n{days_text}"
+    return f"{header}\n\n{days_text}"
 
 
 def format_full_message(
@@ -538,7 +538,8 @@ def send_telegram_message(message: str) -> Optional[int]:
     payload = {
         "chat_id": TELEGRAM_CHANNEL_ID,
         "text": message,
-        "parse_mode": "HTML"
+        "parse_mode": "HTML",
+        "disable_notification": True
     }
     
     try:
@@ -602,7 +603,7 @@ def manage_messages(new_message_id: int):
     """Pin new message, delete old ones if > MAX_MESSAGES"""
     message_ids = load_message_ids()
     
-    pin_message(new_message_id)
+    # pin_message(new_message_id)
     message_ids.append(new_message_id)
     
     while len(message_ids) > MAX_MESSAGES:
