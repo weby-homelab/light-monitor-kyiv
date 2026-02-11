@@ -16,6 +16,7 @@ PORT = 8889
 # SECRET_KEY handled in state
 STATE_FILE = "power_monitor_state.json"
 SCHEDULE_FILE = "last_schedules.json"
+EVENT_LOG_FILE = "event_log.json"
 TZ_OFFSET = 2  # UTC+2 (EET), adjust for DST manually or use pytz if available (avoiding extra deps for now)
 
 # --- State Management ---
@@ -28,6 +29,42 @@ state = {
 }
 
 state_lock = threading.RLock()
+
+def log_event(event_type, timestamp):
+    """
+    Logs an event (up/down) to a JSON file for historical analysis.
+    """
+    try:
+        entry = {
+            "timestamp": timestamp,
+            "event": event_type,
+            "date_str": datetime.datetime.fromtimestamp(timestamp, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Read existing logs or create new list
+        logs = []
+        if os.path.exists(EVENT_LOG_FILE):
+            try:
+                with open(EVENT_LOG_FILE, 'r') as f:
+                    content = f.read().strip()
+                    if content:
+                        logs = json.loads(content)
+                        if not isinstance(logs, list):
+                            logs = []
+            except (json.JSONDecodeError, FileNotFoundError):
+                logs = []
+            
+        logs.append(entry)
+        
+        # Keep roughly last ~30 days (assuming ~20 events/day max = 600 events)
+        if len(logs) > 1000: 
+            logs = logs[-1000:]
+            
+        with open(EVENT_LOG_FILE, 'w') as f:
+            json.dump(logs, f, indent=2)
+            
+    except Exception as e:
+        print(f"Failed to log event: {e}")
 
 def load_state():
     global state
@@ -60,24 +97,14 @@ def format_duration(seconds):
     m = int((seconds % 3600) // 60)
     return f"{h}год {m}хв"
 
-def get_schedule_info(is_power_on):
-    """
-    Parses last_schedules.json to find the next change.
-    Data format: "slots": [false, false, ..., true, true] (48 half-hour slots)
-    true = OUTAGE (blackout), false = POWER ON (light)
-    Wait, let's verify logic. Usually 'true' in blackout schedules means 'active outage'.
-    Let's assume: true = OUTAGE, false = POWER.
-    """
+def get_schedule_context():
     try:
         with open(SCHEDULE_FILE, 'r') as f:
             data = json.load(f)
         
-        # Priority: yasno -> github
         source = data.get('yasno') or data.get('github')
-        if not source:
-            return "Невідомо (джерело не знайдено)"
+        if not source: return (None, None, "Невідомо")
         
-        # Get first group (e.g., "GPV36.1")
         group_key = list(source.keys())[0]
         schedule_data = source[group_key]
         
@@ -85,40 +112,51 @@ def get_schedule_info(is_power_on):
         today_str = now.strftime("%Y-%m-%d")
         
         if today_str not in schedule_data or not schedule_data[today_str].get('slots'):
-            return "Графік на сьогодні відсутній"
+            return (None, None, "Графік відсутній")
             
-        slots = schedule_data[today_str]['slots'] # 48 items
-        
-        # Current slot index (0-47)
+        slots = schedule_data[today_str]['slots']
         current_slot_idx = (now.hour * 2) + (1 if now.minute >= 30 else 0)
         
-        # Find next change
-        found_change = False
-        change_slot_idx = -1
+        # True = Light, False = Outage
+        is_light_now = slots[current_slot_idx]
         
-        # Look ahead in today's slots
-        # If power is ON (is_power_on=True), we look for next OUTAGE (true)
-        # If power is OFF (is_power_on=False), we look for next POWER (false)
-        target_state = True if is_power_on else False 
-        
-        for i in range(current_slot_idx, 48):
-            if slots[i] == target_state:
-                change_slot_idx = i
-                found_change = True
+        # Find end of current block
+        end_idx = 48
+        for i in range(current_slot_idx + 1, 48):
+            if slots[i] != is_light_now:
+                end_idx = i
                 break
         
-        if found_change:
-            # Convert slot index back to time
-            hour = change_slot_idx // 2
-            minute = "30" if change_slot_idx % 2 == 1 else "00"
-            return f"{hour:02}:{minute}"
+        t_end = f"{end_idx//2:02}:{ '30' if end_idx%2 and end_idx<48 else '00'}"
+        if end_idx == 48: t_end = "23:59"
+        
+        # Find next block range
+        next_start_idx = end_idx
+        if next_start_idx < 48:
+            next_end_idx = 48
+            for i in range(next_start_idx + 1, 48):
+                if slots[i] == is_light_now:
+                    next_end_idx = i
+                    break
+            
+            ns_t = f"{next_start_idx//2:02}:{ '30' if next_start_idx%2 else '00'}"
+            ne_t = f"{next_end_idx//2:02}:{ '30' if next_end_idx%2 and next_end_idx<48 else '00'}"
+            if next_end_idx == 48: ne_t = "23:59"
+            next_range = f"{ns_t} - {ne_t}"
         else:
-            return "До кінця доби без змін"
+            next_range = "до кінця доби"
+            
+        return (is_light_now, t_end, next_range)
             
     except Exception as e:
-        return f"Помилка графіку: {str(e)}"
+        print(f"Schedule error: {e}")
+        return (None, None, "Помилка")
 
 def send_telegram(message):
+    # Mask token for logging
+    token_masked = TOKEN[:5] + "..." + TOKEN[-5:] if TOKEN else "None"
+    print(f"DEBUG: Sending telegram message to {CHAT_ID} via bot {token_masked}")
+    
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -126,7 +164,10 @@ def send_telegram(message):
         "parse_mode": "HTML"
     }
     try:
-        requests.post(url, json=payload, timeout=5)
+        r = requests.post(url, json=payload, timeout=5)
+        print(f"DEBUG: Telegram Response: {r.status_code} {r.text}")
+        if r.status_code != 200:
+            print(f"Telegram API Error: {r.status_code} {r.text}")
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
 
@@ -151,6 +192,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 if previous_status == "down" or previous_status == "unknown":
                     state["status"] = "up"
                     state["came_up_at"] = current_time
+                    log_event("up", current_time)
                     
                     # Calculate outage duration
                     if state["went_down_at"] > 0:
@@ -158,12 +200,17 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     else:
                         duration = "?"
                     
-                    schedule_next = get_schedule_info(is_power_on=True)
+                    sched_light_now, current_end, next_range = get_schedule_context()
+                    if sched_light_now is False: # Should be dark
+                        sched_msg = f"По графіку світла не мало бути до {current_end}, але нам сьогодні щастить більше"
+                    else:
+                        sched_msg = f"Наступне планове: {next_range}"
+
                     time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
                     
                     msg = (f"🟢 <b>{time_str} ТАК💡Світло є!</b>\n"
                            f"🕓 Його не було {duration}\n"
-                           f"🗓 Наступне планове: {schedule_next}")
+                           f"🗓 {sched_msg}")
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
                 
@@ -190,32 +237,44 @@ def monitor_loop():
             
             # Timeout threshold: 3 minutes (180 seconds)
             if status == "up" and (current_time - last_seen) > 180:
-                print("Timeout detected! Marking as DOWN.")
+                # Timeout detected!
                 state["status"] = "down"
-                # We assume it went down roughly when we last saw it + some small buffer, 
-                # but "last_seen" is the most accurate "last known alive" time.
-                state["went_down_at"] = last_seen 
                 
-                # Calculate how long it was UP
+                # Assume outage happened 1 min after last ping (since pings are every 1 min)
+                down_time_ts = last_seen + 60
+                state["went_down_at"] = down_time_ts
+                log_event("down", down_time_ts)
+                
+                # Calculate how long it was UP (using accurate down time)
                 if state["came_up_at"] > 0:
-                    duration = format_duration(last_seen - state["came_up_at"])
+                    duration = format_duration(down_time_ts - state["came_up_at"])
                 else:
                     duration = "?"
                 
-                schedule_expect = get_schedule_info(is_power_on=False)
-                time_str = datetime.datetime.fromtimestamp(last_seen + 180, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M") # Use detection time for msg
+                sched_light_now, current_end, next_range = get_schedule_context()
+                if sched_light_now is True: # Should be light
+                    sched_msg = f"По графіку світло має бути (до {current_end}), можливо діють екстренні відключення"
+                else:
+                    sched_msg = f"Очікуємо за графіком: {next_range}"
+
+                time_str = datetime.datetime.fromtimestamp(down_time_ts, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
                 
                 msg = (f"🔴 <b>{time_str} Зникло ❌  хай йому грець!</b>\n"
                        f"🕓 Воно було {duration}\n"
-                       f"🗓 Очікуємо за графіком: {schedule_expect}")
+                       f"🗓 {sched_msg}")
                 
                 threading.Thread(target=send_telegram, args=(msg,)).start()
                 save_state()
 
 # --- Main Execution ---
 if __name__ == "__main__":
+    print(f"Starting Power Monitor Server on port {PORT}...", flush=True)
+    if not TOKEN or not CHAT_ID:
+        print("ERROR: Token or Chat ID missing!", flush=True)
+    else:
+        print(f"Config loaded. ChatID: {CHAT_ID}", flush=True)
+        
     load_state()
-    print(f"Starting Power Monitor Server on port {PORT}...")
     print(f"Push URL: http://<YOUR_IP>:{PORT}/api/push/{state['secret_key']}")
     
     # Write the URL to a file so the user can see it easily

@@ -6,7 +6,7 @@ After=network.target
 User=root
 WorkingDirectory=/root/geminicli/light-monitor-kyiv
 EnvironmentFile=/root/geminicli/light-monitor-kyiv/.env
-ExecStart=/root/geminicli/light-monitor-kyiv/venv/bin/python power_monitor_server.py
+ExecStart=/root/geminicli/light-monitor-kyiv/venv/bin/python -u power_monitor_server.py
 Restart=always
 RestartSec=5
 
