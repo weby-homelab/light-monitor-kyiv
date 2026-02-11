@@ -234,6 +234,7 @@ def generate_chart(target_date, intervals, schedule_intervals):
     
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M', tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
     ax.xaxis.set_major_locator(mdates.HourLocator(interval=2, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
+    ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
     
     # Custom Y labels - centered on bars
     ax.set_yticks([sched_y + sched_h/2, act_y + act_h/2])
