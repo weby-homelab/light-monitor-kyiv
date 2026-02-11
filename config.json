@@ -1,1 +1,62 @@
-{"groups": ["GPV36.1"], "region": "kyiv", "yasno_region_id": "25", "yasno_dso_id": "902"}
+{
+  "settings": {
+    "region": "kyiv",
+    "groups": ["GPV36.1"],
+    "style": "table",
+    "table_format": "code_lines",
+    "max_messages": 1,
+    "show_intervals_detail": true
+  },
+  "sources": {
+    "github": {
+      "enabled": true,
+      "name": "ДТЕК"
+    },
+    "yasno": {
+      "enabled": true,
+      "name": "Yasno",
+      "region_id": "25",
+      "dso_id": "902"
+    }
+  },
+  "ui": {
+    "icons": {
+      "calendar": "📆",
+      "clock": "🕐",
+      "on": "☑️",
+      "off": "✖️",
+      "on_list": "🟩",
+      "off_list": "🟠",
+      "emergency": "⚠️",
+      "pending": "⏳",
+      "separator": "⠅",
+      "light_on": "☀",
+      "light_off": "🔘"
+    },
+    "text": {
+      "on_full": "Світло є",
+      "off_full": "Світла нема",
+      "on_detail": "Світло буде",
+      "off_detail": "Світла не буде",
+      "emergency": "Аварійне Відключення!",
+      "pending": "Очікується інформація про графік",
+      "updated": "Оновлено",
+      "hours_short": "год."
+    },
+    "format": {
+      "header_template": "========== ❖ {group} ❖ ==========",
+      "separator_source": "✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧",
+      "separator_day": "■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■",
+      "separator_footer": "────────────────────",
+      "table_separator": "-",
+      "detail_indent": "   "
+    },
+    "spacing": {
+      "before_separator_source": 2,
+      "before_separator_day": 2,
+      "before_summary": 2,
+      "before_footer": 2,
+      "after_footer_separator": 1
+    }
+  }
+}
