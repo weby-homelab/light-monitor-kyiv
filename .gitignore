@@ -4,6 +4,8 @@ venv/
 *.state
 __pycache__/
 run_light_monitor.sh
+run_daily_report.sh
+run_weekly_report.sh
 power_monitor_state.json
 power_push_url.txt
 .env
