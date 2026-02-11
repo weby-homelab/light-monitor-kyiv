@@ -1,186 +1,108 @@
-# light-monitor-kyiv (Fork)
+# light-monitor-kyiv (Extended Fork)
 
-Цей проект є форком [banditByte/light-monitor-kyiv](https://github.com/banditByte/light-monitor-kyiv) з доданими можливостями локального запуску та моніторингу.
+Це розширена версія (форк) проекту [banditByte/light-monitor-kyiv](https://github.com/banditByte/light-monitor-kyiv).
+Оригінальний проект призначений для отримання графіків відключень. Цей форк додає **моніторинг реального стану світла**, порівняння "Очікування/Реальність" та генерацію детальних графічних звітів.
 
-Для роботи бота використовюється [Публічне сховище даних про планові відключення електроенергії в Україні.](https://github.com/Baskerville42/outage-data-ua/tree/main) та YASNO (API)
+## 🌟 Основні можливості
 
-Бот запускається щогодини (cron), збирає інформацію та надсилає у Телеграм канал графікі для одної або декількох черг одразу за наявності оновлень.
+1.  **Моніторинг графіків (Original):** Отримання даних з [outage-data-ua](https://github.com/Baskerville42/outage-data-ua) та YASNO.
+2.  **Реальний моніторинг (New):** Відстеження фактичної наявності електроенергії (через пінги або локальний запуск).
+3.  **Графічні звіти (New):**
+    *   **Щоденний звіт:** Графік, що накладає фактичні відключення на планові. Дозволяє побачити, наскільки точно дотримуються графіків.
+    *   **Тижневий звіт:** Зведена статистика за 7 днів (кількість годин зі світлом/без).
+4.  **Telegram-бот:**
+    *   Сповіщення про зміну графіків.
+    *   Сповіщення про фактичне зникнення/появу світла.
+    *   Автоматична відправка звітів.
 
-Старі повідомлення видаляються, залишаються лише 3 останніх.
+## 📊 Приклади звітів
 
+Скрипт генерує зображення, де:
+*   🟢 **Зелений:** Світло було (фактично).
+*   🔴 **Червоний:** Світла не було (фактично).
+*   ⬜ **Сірий фон:** Планові графіки (сірі смуги показують, коли світло *мало б* бути відсутнім за розкладом).
 
-Приклад того, як виглядають повідомлення про оновлення графіків у Телеграм:
+Це дозволяє миттєво оцінити ситуацію: "Чи вимикали світло тоді, коли не мали б?"
 
-============ ◉ 12.1 ◉ ============
+## 🛠 Встановлення та Налаштування
 
-📆  02.02 (Понеділок) [outage-data-ua, yasno]:
+Цей проект найкраще працює на пристрої, який працює 24/7 (наприклад, VPS сервер, Raspberry Pi або старий ноутбук).
 
-🟩 00:00 - 04:00 … (4 години)  
-🟠 04:00 - 11:00 … (7 годин)  
-🟩 11:00 - 13:00 … (2 години)  
-🟠 13:00 - 20:30 … (7.5 години)  
-🟩 20:30 - 22:00 … (1.5 години)  
-🟠 22:00 - 24:00 … (2 години)
-
-🟩 Світло є: 7.5 години  
-🟠 Світла нема: 16.5 години
-
-■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■
-
-📆  03.02 (Вівторок) [outage-data-ua, yasno]:
-
-🟠 00:00 - 05:00 … (5 годин)  
-🟩 05:00 - 10:00 … (5 годин)  
-🟠 10:00 - 17:00 … (7 годин)  
-🟩 17:00 - 19:00 … (2 години)  
-🟠 19:00 - 24:00 … (5 годин)
-
-🟩 Світло є: 7 годин  
-🟠 Світла нема: 17 годин
-
-============ ◉ 18.1 ◉ ============
-
-📆  02.02 (Понеділок) [outage-data-ua, yasno]:
-
-🟠 00:00 - 01:30 … (1.5 години)  
-🟩 01:30 - 07:00 … (5.5 години)  
-🟠 07:00 - 13:00 … (6 годин)  
-🟩 13:00 - 16:30 … (3.5 години)  
-🟠 16:30 - 23:30 … (7 годин)  
-🟩 23:30 - 24:00 … (0.5 години)
-
-🟩 Світло є: 9.5 години  
-🟠 Світла нема: 14.5 години
-
-■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■
-
-📆  03.02 (Вівторок) [outage-data-ua, yasno]:
-
-🟩 00:00 - 05:30 … (5.5 години)  
-🟠 05:30 - 10:30 … (5 годин)  
-🟩 10:30 - 14:00 … (3.5 години)  
-🟠 14:00 - 21:00 … (7 годин)  
-🟩 21:00 - 24:00 … (3 години)
-
-🟩 Світло є: 12 годин  
-🟠 Світла нема: 12 годин
-
-🕐 Оновлено: 02.02.2026 ⠅18:51 (Київ)
-
-
-##### Локальний запуск / Local Setup
-
-Якщо ви бажаєте запустити бота локально (наприклад, на Raspberry Pi або VPS), а не через GitHub Actions:
-
-1.  Клонуйте репозиторій.
-2.  Встановіть залежності: `pip install -r requirements.txt`
-3.  Скопіюйте файл запуску: `cp run_light_monitor.example.sh run_light_monitor.sh`
-4.  Відредагуйте `run_light_monitor.sh` і додайте свої `TELEGRAM_BOT_TOKEN` та `TELEGRAM_CHANNEL_ID`.
-5.  Запустіть скрипт або налаштуйте його в crontab.
-
-##### Що вам потрібно, аби змусити код працювати на себе (GitHub Actions):
-
-1. **Клонувати цей GitHub-репозиторій**  
-   (можете створити новий public repo в акаунті).
-
-2. **Додати два секрети** в Settings → Secrets для цього репозиторію:  
-   - `TELEGRAM_BOT_TOKEN` — токен бота (наприклад, `12345:ABC...`)
-   - `TELEGRAM_CHANNEL_ID` — chat_id вашого каналу (наприклад, `@mychannel` або числовий Id `-100...`)
-
-3. **Пересвідчитись**, що репозиторій має необхідні дозволи  
-   ("Allow all actions and reusable workflows").
-
-<details>
-
-<summary>Step-by-step guide [English]</summary>
-
-#### What the script creates / updates
-
-*   last\_schedules.json — cache of last schedules (used to detect changes).
-*   message\_ids.json — stores Telegram message ids to delete older messages (keeps up to MAX\_MESSAGES).
-*   The GitHub Action tries to commit these files back to the repo so the cache persists between runs.
-
-
-#### Step-by-step setup (GitHub Actions)
-
-Prerequisites
-
-*   GitHub account.
-*   A Telegram bot token and a channel (see step 4).
-*   Optional: fork the repository or create a new repo (you can keep it public).
-
-*   Fork or clone the repository
-    
-    *   Fork on GitHub or clone locally:
-        *   git clone [https://github.com/banditByte/light-monitor-kyiv.git](https://github.com/banditByte/light-monitor-kyiv.git)
-*   Create (or verify) configuration
-    
-    *   Edit config.json if you want different groups, region or Yasno IDs. Example keys:
-        *   groups — list of group names (GPVxx.x) monitored
-        *   region — region slug used for the outage-data-ua source (default "kyiv")
-        *   yasno\_region\_id and yasno\_dso\_id — used for the Yasno API
-    *   The repo includes a default config.json (shown above). Adjust groups / ids as needed.
-*   Create a Telegram bot and channel details
-    
-    *   Create a bot with BotFather to get TELEGRAM\_BOT\_TOKEN (format like 12345:ABC...).
-    *   Create a Telegram channel (or use existing). Add the bot to the channel and give it permission to post (bot must be admin or allowed to post).
-    *   To get TELEGRAM\_CHANNEL\_ID:
-        *   If you have a public channel username, you can use @yourchannelname.
-        *   To get numeric id: send a message to the channel, then call: [https://api.telegram.org/bot](https://api.telegram.org/bot)<TELEGRAM\_BOT\_TOKEN>/getUpdates Look for "chat":{"id": -100XXXXXXXXXX} in the returned json (that -100... value is channel id).
-        *   You can also use helper bots like @get\_id\_bot or similar.
-*   Add repository secrets (Actions) on GitHub
-    
-    *   Go to your repo → Settings → Secrets and variables → Actions → New repository secret
-        *   Add TELEGRAM\_BOT\_TOKEN with the token value.
-        *   Add TELEGRAM\_CHANNEL\_ID with the numeric id or @channelusername.
-    *   Ensure Actions permissions allow the workflow to run and push cache files:
-        *   The workflow sets permission contents: write — make sure repository settings do not block write actions.
-        *   If the README suggests "Allow all actions and reusable workflows", enable appropriate settings in Settings → Actions.
-*   Confirm the workflow schedule and behavior
-    
-    *   The included workflow runs hourly by cron: '0 \*/1 \* \* \*' and also supports manual runs (workflow\_dispatch).
-    *   The workflow uses Python 3.11 and installs requirements via pip install -r requirements.txt.
-    *   On successful run it executes python main.py and the script will:
-        *   Fetch outage-data-ua and Yasno API
-        *   Format messages and send to Telegram
-        *   Keep last\_schedules.json and message\_ids.json (cache files)
-        *   Attempt to commit updated cache files back to the repo (git push || true — push is best-effort and may fail if permissions or token are restricted).
-*   Test the workflow
-    
-    *   In the repo on GitHub, open Actions → the workflow → Run workflow (manual dispatch) to test.
-    *   Check Action logs for errors (installation, missing env, network).
-
-</details>
-
----
-
-Аби дізнатися про код детально, дивіться файл налаштувань (config.json) на читійте коментарі.
-
-##### Структура та призначення файлів у репозиторії
+### 1. Клонування репозиторію
 
 ```bash
-light-monitor-kyiv/
-├── .github/
-│   └── workflows/
-│       └── check_outages.yml   # файл конфігурації GitHub Actions
-├── config.json                 # конфігурація груп
-├── main.py                     # основний код
-├── requirements.txt            # залежності
-├── last_schedules.json         # кеш розкладів (створюється автоматично)
-├── message_ids.json            # ID повідомлень для видалення (створюється автоматично)
-└── README.md                   # цей файл
+git clone https://github.com/weby-homelab/light-monitor-kyiv.git
+cd light-monitor-kyiv
 ```
 
+### 2. Встановлення залежностей
+
+Використовується Python 3.10+. Рекомендується створити віртуальне середовище.
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Налаштування
+
+Скопіюйте приклад скрипта запуску та налаштуйте змінні:
+
+```bash
+cp run_light_monitor.example.sh run_light_monitor.sh
+chmod +x run_light_monitor.sh
+nano run_light_monitor.sh
+```
+
+Вам потрібно вказати:
+*   `TELEGRAM_BOT_TOKEN`: Токен вашого бота (від @BotFather).
+*   `TELEGRAM_CHANNEL_ID`: ID каналу або чату, куди надсилати звіти.
+
+Також перевірте `config.json` для налаштування вашої групи відключень (за замовчуванням Київ, група 4.1 / GPV36.1).
+
+### 4. Компоненти системи
+
+У проекті є кілька незалежних скриптів, які можна запускати через Cron:
+
+#### А. Монітор графіків (`main.py`)
+Перевіряє оновлення на Github/Yasno і надсилає текстові повідомлення.
+*Рекомендований запуск:* Щодини.
+```cron
+0 * * * * /path/to/light-monitor-kyiv/run_light_monitor.sh
+```
+
+#### Б. Сервер моніторингу (`power_monitor_server.py`)
+(Опціонально) Запускається як сервіс. Слухає запити або пінгує роутер для визначення наявності світла. Логує події у `event_log.json`.
+
+#### В. Генерація звітів
+Аналізує `event_log.json` (фактичні події) та `last_schedules.json` (історію графіків).
+
+*   **Щоденний звіт (`run_daily_report.sh`):**
+    Рекомендується запускати в кінці доби (наприклад, 23:55).
+    ```cron
+    55 23 * * * /path/to/light-monitor-kyiv/run_daily_report.sh
+    ```
+
+*   **Тижневий звіт (`run_weekly_report.sh`):**
+    Рекомендується запускати в неділю ввечері.
+    ```cron
+    58 23 * * 0 /path/to/light-monitor-kyiv/run_weekly_report.sh
+    ```
+
+## 📂 Структура файлів
+
+*   `main.py`: Основний скрипт перевірки графіків.
+*   `power_monitor_server.py`: Логіка відстеження реального стану (Up/Down).
+*   `generate_daily_report.py`: Малювання графіку за добу.
+*   `generate_weekly_report.py`: Генерація статистики за тиждень.
+*   `event_log.json`: Журнал реальних відключень (база даних для звітів).
+*   `last_schedules.json`: Кеш останніх відомих графіків.
+
+## 🤝 Подяка
+
+*   [banditByte](https://github.com/banditByte) за оригінальну ідею та парсер графіків.
+*   [outage-data-ua](https://github.com/Baskerville42/outage-data-ua) за джерело даних.
 
 ---
-
-##### Корисне
-[Отримати номер групи для Києва із портала YASNO](https://sergeymaximenko.github.io/SetTimeGenerator/GetGroupForKiev.html))
-
-[Svitlobot Map](https://svitlobot.pp.ua/map.php)
-
-[Map - Svitlobot](https://svitlobot.obbdev.com/Map)
-
----
-
-Дякую спільноті https://t.me/svitlobot_api за те, що нагадала: *хочеш, аби все добре працювало і було, як потрібно саме тобі, зроби все сам* ¯\\_(ツ)_/¯
+**License:** MIT
