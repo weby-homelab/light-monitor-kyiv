@@ -253,7 +253,7 @@ def monitor_loop():
                 
                 sched_light_now, current_end, next_range = get_schedule_context()
                 if sched_light_now is True: # Should be light
-                    sched_msg = f"По графіку світло має бути (до {current_end}), можливо діють екстренні відключення"
+                    sched_msg = f"По графіку світло має бути до {current_end}, можливо діють екстренні відключення"
                 else:
                     sched_msg = f"Очікуємо за графіком: {next_range}"
 

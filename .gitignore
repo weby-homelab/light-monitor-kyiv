@@ -7,3 +7,6 @@ run_light_monitor.sh
 power_monitor_state.json
 power_push_url.txt
 .env
+event_log.json
+last_schedules.json
+message_ids.json
