@@ -33,9 +33,9 @@ calc_duration() {
 # Function to send Telegram message
 send_msg() {
     local message="$1"
-    /usr/bin/curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" 
-        -d chat_id="$CHAT_ID" 
-        -d parse_mode="HTML" 
+    /usr/bin/curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
+        -d chat_id="$CHAT_ID" \
+        -d parse_mode="HTML" \
         --data-urlencode "text=$message" > /dev/null
 }
 
@@ -50,8 +50,8 @@ case "$1" in
         DURATION=$(calc_duration "$LAST_HEARTBEAT" "$NOW")
         
         # Message
-        MSG="🟢 <b>$TIME ТАК💡Світло є!</b>
-🕓 Його не було $DURATION
+        MSG="🟢 <b>$TIME Світло з'явилося</b>
+🕒 Його не було $DURATION
 🗓 Наступне планове: <i>Див. графік</i>"
 
         send_msg "$MSG"
@@ -69,8 +69,8 @@ case "$1" in
         
         DURATION=$(calc_duration "$START_TIME" "$NOW")
         
-        MSG="🔴 <b>$TIME Зникло ❌  хай йому грець!</b>
-🕓 Воно було $DURATION
+        MSG="🔴 <b>$TIME Світло зникло!</b>
+🕒 Світло було $DURATION
 🗓 Очікуємо за графіком: <i>Див. графік</i>"
 
         send_msg "$MSG"

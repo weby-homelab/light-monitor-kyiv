@@ -9,6 +9,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 CONFIG_FILE = "config.json"
 CACHE_FILE = "last_schedules.json"
+HISTORY_FILE = "schedule_history.json"
 MESSAGES_FILE = "message_ids.json"
 
 KYIV_TZ = timezone(timedelta(hours=2))
@@ -485,7 +486,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
         if day_msgs:
             day_separator = f"{space_day}{sep_day}\n"
             body = day_separator.join(day_msgs)
-            blocks.append(f"{header}\n{body}")
+            blocks.append(f"{header}\n\n{body}")
     
     if not blocks:
         return None
@@ -504,7 +505,7 @@ def send_tg(text: str) -> Optional[int]:
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHANNEL_ID, "text": text, "parse_mode": "HTML"},
+            json={"chat_id": TELEGRAM_CHANNEL_ID, "text": text, "parse_mode": "HTML", "disable_notification": True},
             timeout=30
         )
         r.raise_for_status()
@@ -522,11 +523,6 @@ def manage_msgs(mid: int, cfg: dict):
             ids = json.load(f)
     except:
         ids = []
-    
-    requests.post(
-        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/pinChatMessage",
-        json={"chat_id": TELEGRAM_CHANNEL_ID, "message_id": mid, "disable_notification": True}
-    )
     
     ids.append(mid)
     
@@ -574,6 +570,45 @@ def main():
         return r
     
     new_c = {"github": serialize(gh_sched), "yasno": serialize(ya_sched)}
+    
+    # --- History Saving Logic ---
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r") as f:
+                history = json.load(f)
+        else:
+            history = {}
+            
+        today_str = get_kyiv_now().strftime("%Y-%m-%d")
+        
+        # Prioritize Yasno, then GitHub
+        # Assuming single group GPV36.1 for now, or take the first available
+        slots_to_save = None
+        
+        # Try Yasno
+        if "yasno" in new_c:
+            for grp, days in new_c["yasno"].items():
+                if today_str in days and days[today_str].get("slots"):
+                    slots_to_save = days[today_str]["slots"]
+                    break
+        
+        # Try GitHub if no Yasno
+        if not slots_to_save and "github" in new_c:
+            for grp, days in new_c["github"].items():
+                if today_str in days and days[today_str].get("slots"):
+                    slots_to_save = days[today_str]["slots"]
+                    break
+                    
+        if slots_to_save:
+            history[today_str] = slots_to_save
+            with open(HISTORY_FILE, "w") as f:
+                json.dump(history, f, indent=2)
+            print(f"History updated for {today_str}")
+            
+    except Exception as e:
+        print(f"Error saving history: {e}")
+    # ----------------------------
+
     old_c = get_cache()
     
     if new_c == old_c:

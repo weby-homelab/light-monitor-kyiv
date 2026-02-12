@@ -2,10 +2,10 @@
   "settings": {
     "region": "kyiv",
     "groups": ["GPV36.1"],
-    "style": "table",
+    "style": "list",
     "table_format": "code_lines",
     "max_messages": 1,
-    "show_intervals_detail": true
+    "show_intervals_detail": false
   },
   "sources": {
     "github": {
@@ -23,15 +23,15 @@
     "icons": {
       "calendar": "📆",
       "clock": "🕐",
-      "on": "☑️",
+      "on": "🔆",
       "off": "✖️",
-      "on_list": "🟩",
-      "off_list": "🟠",
+      "on_list": "🔆",
+      "off_list": "✖️",
       "emergency": "⚠️",
       "pending": "⏳",
       "separator": "⠅",
-      "light_on": "☀",
-      "light_off": "🔘"
+      "light_on": "🔆",
+      "light_off": "✖️"
     },
     "text": {
       "on_full": "Світло є",
@@ -44,18 +44,18 @@
       "hours_short": "год."
     },
     "format": {
-      "header_template": "========== ❖ {group} ❖ ==========",
-      "separator_source": "✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧",
-      "separator_day": "■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■",
-      "separator_footer": "────────────────────",
+      "header_template": "🔆 Графік групи <b>{group}</b> 🔆",
+      "separator_source": "✧  ✧  ✧",
+      "separator_day": "■  ■  ■",
+      "separator_footer": " - ",
       "table_separator": "-",
       "detail_indent": "   "
     },
     "spacing": {
-      "before_separator_source": 2,
-      "before_separator_day": 2,
-      "before_summary": 2,
-      "before_footer": 2,
+      "before_separator_source": 1,
+      "before_separator_day": 1,
+      "before_summary": 1,
+      "before_footer": 0,
       "after_footer_separator": 1
     }
   }

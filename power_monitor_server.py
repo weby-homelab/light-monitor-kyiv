@@ -171,6 +171,40 @@ def send_telegram(message):
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
 
+def get_deviation_info(event_time, is_up):
+    # Calculate deviation from nearest schedule boundary
+    # event_time: timestamp
+    # is_up: True if light appeared, False if disappeared
+    
+    dt = datetime.datetime.fromtimestamp(event_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+    minute = dt.minute
+    
+    # Nearest boundary (00 or 30)
+    if minute < 15:
+        sched_minute = 0
+        sched_dt = dt.replace(minute=0, second=0, microsecond=0)
+    elif minute < 45:
+        sched_minute = 30
+        sched_dt = dt.replace(minute=30, second=0, microsecond=0)
+    else:
+        sched_minute = 0
+        sched_dt = (dt + datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        
+    diff_min = int((dt - sched_dt).total_seconds() / 60)
+    
+    # Analyze context
+    sched_light, t_end, next_range = get_schedule_context()
+    
+    # Basic deviation text based on time proximity
+    msg = ""
+    if abs(diff_min) > 2: # Ignore small jitter
+        if diff_min > 0:
+            msg = f"⚠️ Запізнення {('увімкнення' if is_up else 'вимкнення')}: {diff_min} хв"
+        else:
+            msg = f"⏱ {'Увімкнення' if is_up else 'Вимкнення'} раніше на: {abs(diff_min)} хв"
+            
+    return msg
+
 # --- Heartbeat Handler ---
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -202,15 +236,19 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     sched_light_now, current_end, next_range = get_schedule_context()
                     if sched_light_now is False: # Should be dark
-                        sched_msg = f"По графіку світла не мало бути до {current_end}, але нам сьогодні щастить більше"
+                        sched_msg = f"За графіком НЕ мало бути до {current_end}"
                     else:
                         sched_msg = f"Наступне планове: {next_range}"
 
-                    time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
+                    time_str = datetime.datetime.fromtimestamp(current_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
+                    dev_msg = get_deviation_info(current_time, True)
                     
-                    msg = (f"🟢 <b>{time_str} ТАК💡Світло є!</b>\n"
-                           f"🕓 Його не було {duration}\n"
+                    msg = (f"🟢 <b>{time_str} Світло з'явилося</b>\n"
+                           f"🕒 Його не було {duration}\n"
                            f"🗓 {sched_msg}")
+                    
+                    if dev_msg:
+                        msg += f"\n{dev_msg}"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
                 
@@ -253,15 +291,19 @@ def monitor_loop():
                 
                 sched_light_now, current_end, next_range = get_schedule_context()
                 if sched_light_now is True: # Should be light
-                    sched_msg = f"По графіку світло має бути до {current_end}, можливо діють екстренні відключення"
+                    sched_msg = f"За графіком мало бути світло до {current_end}"
                 else:
-                    sched_msg = f"Очікуємо за графіком: {next_range}"
+                    sched_msg = f"Очікуємо за графіком о {current_end}" if current_end else f"Очікуємо за графіком: {next_range}"
 
                 time_str = datetime.datetime.fromtimestamp(down_time_ts, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
+                dev_msg = get_deviation_info(down_time_ts, False)
                 
-                msg = (f"🔴 <b>{time_str} Зникло ❌  хай йому грець!</b>\n"
-                       f"🕓 Воно було {duration}\n"
+                msg = (f"🔴 <b>{time_str} Світло зникло!</b>\n"
+                       f"🕒 Світло було {duration}\n"
                        f"🗓 {sched_msg}")
+                
+                if dev_msg:
+                    msg += f"\n{dev_msg}"
                 
                 threading.Thread(target=send_telegram, args=(msg,)).start()
                 save_state()
