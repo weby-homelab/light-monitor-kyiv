@@ -95,7 +95,7 @@ def get_current_time():
 def format_duration(seconds):
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
-    return f"{h}год {m}хв"
+    return f"{h} год {m} хв"
 
 def get_schedule_context():
     try:
@@ -172,7 +172,6 @@ def send_telegram(message):
         print(f"Failed to send Telegram message: {e}")
 
 def get_deviation_info(event_time, is_up):
-    # Calculate deviation from nearest schedule boundary
     # event_time: timestamp
     # is_up: True if light appeared, False if disappeared
     
@@ -181,29 +180,24 @@ def get_deviation_info(event_time, is_up):
     
     # Nearest boundary (00 or 30)
     if minute < 15:
-        sched_minute = 0
         sched_dt = dt.replace(minute=0, second=0, microsecond=0)
     elif minute < 45:
-        sched_minute = 30
         sched_dt = dt.replace(minute=30, second=0, microsecond=0)
     else:
-        sched_minute = 0
         sched_dt = (dt + datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         
     diff_min = int((dt - sched_dt).total_seconds() / 60)
     
-    # Analyze context
-    sched_light, t_end, next_range = get_schedule_context()
+    if abs(diff_min) <= 2: # Ignore small jitter
+        return ""
     
-    # Basic deviation text based on time proximity
-    msg = ""
-    if abs(diff_min) > 2: # Ignore small jitter
-        if diff_min > 0:
-            msg = f"⚠️ Запізнення {('увімкнення' if is_up else 'вимкнення')}: {diff_min} хв"
-        else:
-            msg = f"⏱ {'Увімкнення' if is_up else 'Вимкнення'} раніше на: {abs(diff_min)} хв"
-            
-    return msg
+    sign = "+" if diff_min > 0 else "−"
+    value_str = f"`{sign}{abs(diff_min)} хв`"
+    
+    action = "увімкнення" if is_up else "вимкнення"
+    label = f"запізнення {action}" if diff_min > 0 else f"раніше {action}"
+    
+    return f"• Точність: {value_str} ({label})"
 
 # --- Heartbeat Handler ---
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -217,7 +211,6 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             with state_lock:
                 current_time = get_current_time()
                 previous_status = state["status"]
-                last_seen = state["last_seen"]
                 
                 # Update heartbeat
                 state["last_seen"] = current_time
@@ -235,20 +228,27 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         duration = "?"
                     
                     sched_light_now, current_end, next_range = get_schedule_context()
-                    if sched_light_now is False: # Should be dark
-                        sched_msg = f"За графіком НЕ мало бути до {current_end}"
-                    else:
-                        sched_msg = f"Наступне планове: {next_range}"
-
+                    
                     time_str = datetime.datetime.fromtimestamp(current_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
                     dev_msg = get_deviation_info(current_time, True)
                     
-                    msg = (f"🟢 <b>{time_str} Світло з'явилося</b>\n"
-                           f"🕒 Його не було {duration}\n"
-                           f"🗓 {sched_msg}")
+                    # Header
+                    msg = f"🟢 <b>{time_str} Світло з'явилося</b>\n\n"
                     
+                    # Stats Block
+                    msg += "📊 <b>Статистика відключення:</b>\n"
+                    msg += f"• Світла не було: `{duration}`\n"
                     if dev_msg:
-                        msg += f"\n{dev_msg}"
+                        msg += f"{dev_msg}\n"
+                    
+                    # Schedule Block
+                    msg += "\n🗓 <b>Аналіз:</b>\n"
+                    if sched_light_now is False: # Should be dark
+                        msg += f"• За графіком: <b>НЕ мало бути до {current_end}</b>\n"
+                        msg += f"• Наступне планове: <b>{next_range}</b>"
+                    else:
+                        msg += f"• Поточний слот: <b>За графіком МАЄ БУТИ</b>\n"
+                        msg += f"• Наступне вимкнення: <b>{current_end}</b>"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
                 
@@ -278,33 +278,39 @@ def monitor_loop():
                 # Timeout detected!
                 state["status"] = "down"
                 
-                # Assume outage happened 1 min after last ping (since pings are every 1 min)
+                # Assume outage happened 1 min after last ping
                 down_time_ts = last_seen + 60
                 state["went_down_at"] = down_time_ts
                 log_event("down", down_time_ts)
                 
-                # Calculate how long it was UP (using accurate down time)
+                # Calculate how long it was UP
                 if state["came_up_at"] > 0:
                     duration = format_duration(down_time_ts - state["came_up_at"])
                 else:
                     duration = "?"
                 
                 sched_light_now, current_end, next_range = get_schedule_context()
-                if sched_light_now is True: # Should be light
-                    sched_msg = f"За графіком мало бути світло до {current_end}"
-                else:
-                    sched_msg = f"Очікуємо за графіком о {current_end}" if current_end else f"Очікуємо за графіком: {next_range}"
-
+                
                 time_str = datetime.datetime.fromtimestamp(down_time_ts, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
                 dev_msg = get_deviation_info(down_time_ts, False)
                 
-                msg = (f"🔴 <b>{time_str} Світло зникло!</b>\n"
-                       f"🕒 Світло було {duration}\n"
-                       f"🗓 {sched_msg}")
+                # Header
+                msg = f"🔴 <b>{time_str} Світло зникло!</b>\n\n"
                 
+                # Stats Block
+                msg += "📊 <b>Статистика сесії:</b>\n"
+                msg += f"• Світло було: `{duration}`\n"
                 if dev_msg:
-                    msg += f"\n{dev_msg}"
+                    msg += f"{dev_msg}\n"
                 
+                # Schedule Block
+                msg += "\n🗓 <b>Прогноз:</b>\n"
+                if sched_light_now is True: # Should be light
+                    msg += f"• Очікуємо за графіком о: <b>{next_range.split(' - ')[0] if ' - ' in next_range else next_range}</b>\n"
+                    msg += f"• Аналіз: <b>За графіком мало бути світло до {current_end}</b>"
+                else:
+                    msg += f"• Очікуємо за графіком о: <b>{current_end}</b>"
+
                 threading.Thread(target=send_telegram, args=(msg,)).start()
                 save_state()
 
