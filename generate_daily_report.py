@@ -150,17 +150,13 @@ def format_duration(seconds):
     return f"{h}год {m}хв"
 
 def generate_chart(target_date, intervals, schedule_intervals):
-    # Dark Mode
+    # Dark Mode - Deep Purple Background
     with plt.style.context('dark_background'):
         # Reduced height again (was 2.4, now 2.0 -> thinner bars)
-        fig, ax = plt.subplots(figsize=(10, 2.0), facecolor='#2E2E2E')
-        ax.set_facecolor('#2E2E2E')
+        fig, ax = plt.subplots(figsize=(10, 2.0), facecolor='#1E122A')
+        ax.set_facecolor('#1E122A')
         
         # Define geometries - Glued together
-        # Schedule (Bottom): y=12.5, h=2.5 (ends at 15)
-        # Separator: at y=15
-        # Actual (Top): y=15, h=2.5 (starts at 15)
-        
         sched_y = 12.5
         sched_h = 2.5
         act_y = 15
@@ -180,12 +176,10 @@ def generate_chart(target_date, intervals, schedule_intervals):
                 ax.broken_barh([(start_num, duration_days)], (sched_y, sched_h), facecolors=color, edgecolor='none')
 
         # --- Separator Line ---
-        # Placed exactly at the boundary (y=15). White for visibility.
         ax.axhline(y=15, color='white', linewidth=0.8, zorder=3)
 
         # --- Actual Data (Top Bar) ---
-        # User requested 'unknown' (past gaps) to be Pale Green and counted as Light.
-        color_map = {'up': '#4CAF50', 'down': '#EF9A9A', 'unknown': '#C8E6C9'} # Unknown = Pale Green
+        color_map = {'up': '#4CAF50', 'down': '#EF9A9A', 'unknown': '#C8E6C9'}
         
         total_up = 0
         total_down = 0
@@ -199,7 +193,6 @@ def generate_chart(target_date, intervals, schedule_intervals):
             elif state == 'down':
                 total_down += duration_sec
             elif state == 'unknown':
-                # User implies unknown gaps are light
                 total_up += duration_sec
                 
             color = color_map.get(state, '#C8E6C9')
@@ -214,60 +207,47 @@ def generate_chart(target_date, intervals, schedule_intervals):
                 last_actual_end = end
 
         # --- Future Bar ---
-        # If the last actual interval ends before day_end, draw "future" bar
         if last_actual_end < day_end:
             start_num = mdates.date2num(last_actual_end)
             end_num = mdates.date2num(day_end)
             duration_num = end_num - start_num
             
-            # Dark grey for "future/unknown" in dark mode
-            ax.broken_barh([(start_num, duration_num)], (act_y, act_h), facecolors='#424242', edgecolor='#757575', hatch='///', linewidth=0.5)
+            # Dark purple-grey for "future" in dark purple mode
+            ax.broken_barh([(start_num, duration_num)], (act_y, act_h), facecolors='#3D2E4A', edgecolor='#5D4E6A', hatch='///', linewidth=0.5)
 
         # --- Formatting ---
-        # Set ylim to fit bars comfortably
         ax.set_ylim(11, 19) 
         ax.set_xlim(mdates.date2num(day_start), mdates.date2num(day_end))
         
-        # Remove spines (borders)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
-        # Bottom spine remains (timeline), make it white
         ax.spines['bottom'].set_color('white')
         
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M', tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
         ax.xaxis.set_major_locator(mdates.HourLocator(interval=2, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
         ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
         
-        # Colors for ticks
         ax.tick_params(axis='x', colors='white')
         ax.tick_params(axis='y', colors='white')
         
-        # Custom Y labels - centered on bars
         ax.set_yticks([sched_y + sched_h/2, act_y + act_h/2])
         ax.set_yticklabels(['Графік', 'Факт'], color='white')
         
         ax.set_title(f"Статистика світла за {target_date.strftime('%d.%m.%Y')}", fontsize=12, color='white')
         
-        # --- Legend ---
         import matplotlib.patches as mpatches
-        
-        # Actual
         green_patch = mpatches.Patch(color='#4CAF50', label=f'Світло є')
         red_patch = mpatches.Patch(color='#EF9A9A', label=f'Світла немає')
-        
-        # Schedule
         yellow_patch = mpatches.Patch(color='#FFF59D', label='Графік: Є')
         gray_patch = mpatches.Patch(color='#BDBDBD', label='Графік: Немає')
         
-        # Single row (ncol=4), adjusted bottom margin
         legend = plt.legend(handles=[green_patch, red_patch, yellow_patch, gray_patch], 
                    loc='upper center', bbox_to_anchor=(0.5, -0.25),
-                   fancybox=False, frameon=False, shadow=False, ncol=4, fontsize='small') # Removed legend frame too
+                   fancybox=False, frameon=False, shadow=False, ncol=4, fontsize='small')
         plt.setp(legend.get_texts(), color='white')
 
         plt.tight_layout()
-        # Adjust layout to make room for legend at bottom
         plt.subplots_adjust(bottom=0.35)
         
         filename = f"report_{target_date.strftime('%Y-%m-%d')}.png"
@@ -307,7 +287,6 @@ if __name__ == "__main__":
     
     if not intervals:
         day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-        # Show unknown for the whole day if no data
         now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
         calc_end = now if target_date == now.date() else day_start + datetime.timedelta(hours=24)
         intervals = [(day_start, calc_end, "unknown")]

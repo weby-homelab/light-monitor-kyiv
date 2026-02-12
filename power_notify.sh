@@ -41,18 +41,21 @@ send_msg() {
 
 case "$1" in
     up)
-        # Check if we were actually down (prevent duplicate notifications on quick reboots)
-        # If LAST_HEARTBEAT is not set, assume this is the first run.
+        # Check if we were actually down
         if [ -z "$LAST_HEARTBEAT" ]; then
-            LAST_HEARTBEAT=$((NOW - 60)) # Default to 1 min ago
+            LAST_HEARTBEAT=$((NOW - 3600)) 
         fi
 
         DURATION=$(calc_duration "$LAST_HEARTBEAT" "$NOW")
         
         # Message
         MSG="🟢 <b>$TIME Світло з'явилося</b>
-🕒 Його не було $DURATION
-🗓 Наступне планове: <i>Див. графік</i>"
+
+📊 <b>Статистика відключення:</b>
+• Світла не було: <code>$DURATION</code>
+
+🗓 <b>Аналіз:</b>
+• Наступне планове: <i>Див. графік</i>"
 
         send_msg "$MSG"
         
@@ -64,14 +67,18 @@ case "$1" in
     down)
         # Graceful shutdown trigger
         if [ -z "$START_TIME" ]; then
-            START_TIME=$((NOW - 3600)) # Default to 1 hour ago if unknown
+            START_TIME=$((NOW - 3600)) 
         fi
         
         DURATION=$(calc_duration "$START_TIME" "$NOW")
         
         MSG="🔴 <b>$TIME Світло зникло!</b>
-🕒 Світло було $DURATION
-🗓 Очікуємо за графіком: <i>Див. графік</i>"
+
+📊 <b>Статистика сесії:</b>
+• Світло було: <code>$DURATION</code>
+
+🗓 <b>Прогноз:</b>
+• Очікуємо за графіком: <i>Див. графік</i>"
 
         send_msg "$MSG"
         
