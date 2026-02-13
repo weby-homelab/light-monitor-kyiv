@@ -296,6 +296,20 @@ if __name__ == "__main__":
     caption = (f"📊 <b>Звіт за {target_date.strftime('%d.%m.%Y')}</b>\n\n"
                f"💡 Світло було: <b>{format_duration(t_up)}</b>\n"
                f"❌ Світла не було: <b>{format_duration(t_down)}</b>")
+
+    if slots:
+        plan_up_cnt = sum(1 for s in slots if s)
+        plan_up_sec = plan_up_cnt * 1800  # 30 min * 60 sec
+        
+        diff_sec = t_up - plan_up_sec
+        diff_hours = diff_sec / 3600
+        sign = "+" if diff_hours > 0 else ""
+        
+        compliance_pct = (t_up / plan_up_sec * 100) if plan_up_sec > 0 else 0
+        
+        caption += f"\n\n📉 <b>Аналітика графіку:</b>\n"
+        caption += f" • За планом: <b>{format_duration(plan_up_sec)}</b>\n"
+        caption += f" • Відхилення: <b>{sign}{diff_hours:.1f}год</b> ({compliance_pct:.0f}% від плану)"
                
     send_telegram_photo(filename, caption)
     
