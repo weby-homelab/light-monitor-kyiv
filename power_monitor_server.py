@@ -172,32 +172,103 @@ def send_telegram(message):
         print(f"Failed to send Telegram message: {e}")
 
 def get_deviation_info(event_time, is_up):
-    # event_time: timestamp
+    # event_time: timestamp (float)
     # is_up: True if light appeared, False if disappeared
     
-    dt = datetime.datetime.fromtimestamp(event_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-    minute = dt.minute
-    
-    # Nearest boundary (00 or 30)
-    if minute < 15:
-        sched_dt = dt.replace(minute=0, second=0, microsecond=0)
-    elif minute < 45:
-        sched_dt = dt.replace(minute=30, second=0, microsecond=0)
-    else:
-        sched_dt = (dt + datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    try:
+        if not os.path.exists(SCHEDULE_FILE):
+            return ""
+            
+        with open(SCHEDULE_FILE, 'r') as f:
+            data = json.load(f)
         
-    diff_min = int((dt - sched_dt).total_seconds() / 60)
-    
-    if abs(diff_min) <= 2: # Ignore small jitter
+        # Priority: Yasno -> Github
+        source = data.get('yasno') or data.get('github')
+        if not source: return ""
+        
+        group_key = list(source.keys())[0]
+        schedule_data = source[group_key]
+        
+        # Localize event time
+        dt = datetime.datetime.fromtimestamp(event_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        date_str = dt.strftime("%Y-%m-%d")
+        
+        if date_str not in schedule_data or not schedule_data[date_str].get('slots'):
+            return ""
+            
+        slots = schedule_data[date_str]['slots']
+        
+        # Current slot index (0-47)
+        # 12:35 -> 12*2 + 1 = 25 (12:30-13:00)
+        current_idx = (dt.hour * 2) + (1 if dt.minute >= 30 else 0)
+        
+        # Find nearest transition
+        # We look for index 'i' where slots[i] != slots[i-1]
+        # Transition happens exactly at start of slot 'i' (i*30 min from start of day)
+        
+        best_diff = 9999
+        transition_type = None # 'up' or 'down'
+        
+        # Check all possible transition points in the day (0..48)
+        # 0 is start of day (00:00), 48 is end of day (24:00)
+        for i in range(49):
+            # Determine state before and after point i
+            # State BEFORE point i is slots[i-1] (if i>0)
+            # State AFTER point i is slots[i] (if i<48)
+            
+            state_before = slots[i-1] if i > 0 else slots[0] # assume start matches 00:00 state
+            state_after = slots[i] if i < 48 else slots[47] # assume end matches 23:30 state
+            
+            if i == 0: state_before = not state_after # Force check at 00:00? No, rely on prev day? Simpler: ignore 00:00 unless explicit change
+            
+            if state_before != state_after:
+                # Found transition at point i
+                # Time of transition: i * 30 minutes from 00:00
+                trans_h = i // 2
+                trans_m = 30 if i % 2 else 0
+                
+                # Create naive datetime for transition
+                trans_dt = dt.replace(hour=trans_h, minute=trans_m, second=0, microsecond=0)
+                
+                # Diff in minutes
+                diff = (dt - trans_dt).total_seconds() / 60
+                
+                if abs(diff) < abs(best_diff):
+                    best_diff = int(diff)
+                    # Determine type
+                    if not state_before and state_after:
+                        transition_type = 'up'
+                    else:
+                        transition_type = 'down'
+
+        # Filter out if too far (e.g. > 90 min away)
+        if abs(best_diff) > 90:
+            return ""
+
+        # Logic check: Did the event match the schedule change?
+        # e.g. Light went DOWN, and nearest schedule change was DOWN -> Good
+        expected_type = 'up' if is_up else 'down'
+        
+        if transition_type != expected_type:
+            return "" # Probably random failure, not schedule related
+
+        # Format output
+        sign = "+" if best_diff > 0 else "−"
+        # + means Event was LATER than Schedule (Delay)
+        # - means Event was EARLIER than Schedule (Early)
+        
+        action = "увімкнення" if is_up else "вимкнення"
+        
+        if best_diff > 0:
+            label = f"запізнення {action}"
+        else:
+            label = f"раніше {action}"
+            
+        return f"• Точність: {sign}{abs(best_diff)} хв ({label})"
+
+    except Exception as e:
+        print(f"Error in deviation calc: {e}")
         return ""
-    
-    sign = "+" if diff_min > 0 else "−"
-    value_str = f"{sign}{abs(diff_min)} хв"
-    
-    action = "увімкнення" if is_up else "вимкнення"
-    label = f"запізнення {action}" if diff_min > 0 else f"раніше {action}"
-    
-    return f"• Точність: {value_str} ({label})"
 
 # --- Heartbeat Handler ---
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
