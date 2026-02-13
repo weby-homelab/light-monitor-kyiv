@@ -1,7 +1,10 @@
 # 🇺🇦 Light Monitor Kyiv (Extended)
 
 [![Check Outages](https://img.shields.io/github/actions/workflow/status/weby-homelab/light-monitor-kyiv/check_outages.yml?branch=main&label=Check%20Outages&style=flat-square)](https://github.com/weby-homelab/light-monitor-kyiv/actions/workflows/check_outages.yml)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/weby-homelab/light-monitor-kyiv?style=flat-square)](https://github.com/weby-homelab/light-monitor-kyiv/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
+[![GitHub stars](https://img.shields.io/github/stars/weby-homelab/light-monitor-kyiv?style=flat-square)](https://github.com/weby-homelab/light-monitor-kyiv/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/weby-homelab/light-monitor-kyiv?style=flat-square)](https://github.com/weby-homelab/light-monitor-kyiv/issues)
 [![License](https://img.shields.io/github/license/weby-homelab/light-monitor-kyiv?style=flat-square)](LICENSE)
 
 Це розширена система моніторингу електропостачання для Києва (та інших регіонів, що підтримуються Yasno/GitHub джерелами).
