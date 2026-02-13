@@ -306,7 +306,7 @@ def render_summary_simple(periods: list[dict], cfg: dict) -> str:
 def render_summary(periods: list[dict], cfg: dict) -> str:
     """Render summary with spacing"""
     show_detail = cfg['settings'].get('show_intervals_detail', False)
-    spacing = get_spacing(cfg, 'before_summary', 1)
+    spacing = get_spacing(cfg, 'before_summary', 2)
     
     if show_detail:
         on_detail = render_intervals_detail(periods, True, cfg)
