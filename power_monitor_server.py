@@ -192,7 +192,7 @@ def get_deviation_info(event_time, is_up):
         return ""
     
     sign = "+" if diff_min > 0 else "−"
-    value_str = f"`{sign}{abs(diff_min)} хв`"
+    value_str = f"{sign}{abs(diff_min)} хв"
     
     action = "увімкнення" if is_up else "вимкнення"
     label = f"запізнення {action}" if diff_min > 0 else f"раніше {action}"
@@ -225,7 +225,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     if state["went_down_at"] > 0:
                         duration = format_duration(current_time - state["went_down_at"])
                     else:
-                        duration = "?"
+                        duration = "невідомо"
                     
                     sched_light_now, current_end, next_range = get_schedule_context()
                     
@@ -237,7 +237,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     # Stats Block
                     msg += "📊 <b>Статистика відключення:</b>\n"
-                    msg += f"• Світла не було: `{duration}`\n"
+                    msg += f"• Світла не було: {duration}\n"
                     if dev_msg:
                         msg += f"{dev_msg}\n"
                     
@@ -287,7 +287,7 @@ def monitor_loop():
                 if state["came_up_at"] > 0:
                     duration = format_duration(down_time_ts - state["came_up_at"])
                 else:
-                    duration = "?"
+                    duration = "невідомо"
                 
                 sched_light_now, current_end, next_range = get_schedule_context()
                 
@@ -299,7 +299,7 @@ def monitor_loop():
                 
                 # Stats Block
                 msg += "📊 <b>Статистика сесії:</b>\n"
-                msg += f"• Світло було: `{duration}`\n"
+                msg += f"• Світло було: {duration}\n"
                 if dev_msg:
                     msg += f"{dev_msg}\n"
                 
