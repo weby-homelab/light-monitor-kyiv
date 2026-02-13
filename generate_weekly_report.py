@@ -136,7 +136,8 @@ def generate_weekly_chart(end_date, daily_data):
             day_date = day_info['date']
             intervals = day_info['intervals']
             
-            y_pos = 6 - i
+            # Increased vertical step from 1 to 1.3 for more spacing between days
+            y_pos = 9 - i * 1.3
             
             day_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
             label = f"{day_names[day_date.weekday()]} {day_date.strftime('%d.%m')}"
@@ -175,6 +176,9 @@ def generate_weekly_chart(end_date, daily_data):
                     ax.broken_barh([(start_n, duration_n)], (y_pos, 0.45), 
                                    facecolors='#3D2E4A', edgecolor='#5D4E6A', hatch='///', linewidth=0.5)
 
+            # --- Separator Line (Background Color) ---
+            ax.axhline(y=y_pos, color='#1E122A', linewidth=0.5, zorder=5)
+
             # --- 2. Draw Schedule Data (Bottom Strip) ---
             slots = get_schedule_slots(day_date)
             if slots:
@@ -188,7 +192,7 @@ def generate_weekly_chart(end_date, daily_data):
                     ax.broken_barh([(start_n, duration_n)], (y_pos - 0.45, 0.45), facecolors=color, edgecolor='none')
 
         # Formatting
-        ax.set_ylim(-0.7, 6.7)
+        ax.set_ylim(-0.5, 10.5)
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(y_labels, color='white')
         ax.tick_params(axis='x', colors='white')
