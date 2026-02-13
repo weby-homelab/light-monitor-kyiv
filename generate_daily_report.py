@@ -185,7 +185,11 @@ def generate_chart(target_date, intervals, schedule_intervals):
         ax.axhline(y=15, color='#1E122A', linewidth=0.5, zorder=5)
 
         # --- Hour Markers on the Bars (Background Color) ---
-        hour_points = [mdates.date2num(datetime.datetime.combine(target_date, datetime.time(h, 0))) for h in range(1, 24)]
+        hour_points = []
+        for h in range(0, 25):
+            point_time = datetime.datetime.combine(target_date, datetime.time.min) + datetime.timedelta(hours=h)
+            hour_points.append(mdates.date2num(point_time))
+            
         # Cover both Schedule (sched_y) and Actual (act_y + act_h) bars
         # sched_y = 12.5, sched_h = 2.5 -> top is 15
         # act_y = 15, act_h = 2.5 -> top is 17.5
