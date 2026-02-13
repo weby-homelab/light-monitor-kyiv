@@ -187,13 +187,12 @@ def generate_chart(target_date, intervals, schedule_intervals):
         # --- Hour Markers on the Bars (Background Color) ---
         hour_points = []
         for h in range(0, 25):
-            point_time = datetime.datetime.combine(target_date, datetime.time.min) + datetime.timedelta(hours=h)
+            point_time = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))) + datetime.timedelta(hours=h)
             hour_points.append(mdates.date2num(point_time))
             
-        # Cover both Schedule (sched_y) and Actual (act_y + act_h) bars
-        # sched_y = 12.5, sched_h = 2.5 -> top is 15
-        # act_y = 15, act_h = 2.5 -> top is 17.5
-        ax.vlines(hour_points, 12.5, 17.5, colors='#1E122A', linewidth=0.8, zorder=6)
+        # Draw vertical lines across the bars to act as hour markers
+        # We use a high zorder (10) to make sure they are visible on top of the bars
+        ax.vlines(hour_points, 12.5, 17.5, colors='#1E122A', linewidth=0.8, zorder=10)
 
         # --- Actual Data (Top Bar) ---
         color_map = {'up': '#4CAF50', 'down': '#EF9A9A', 'unknown': '#C8E6C9'}
