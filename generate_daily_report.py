@@ -11,6 +11,7 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 EVENT_LOG_FILE = "event_log.json"
 SCHEDULE_FILE = "last_schedules.json"
+HISTORY_FILE = "schedule_history.json"
 TZ_OFFSET = 2  # UTC+2 (EET)
 
 def load_events():
@@ -25,33 +26,38 @@ def load_events():
 def load_schedule_slots(target_date):
     """
     Returns the list of 48 boolean slots (True=Light, False=Outage) for the target date.
-    Returns None if no schedule is found.
+    Checks last_schedules.json first, then schedule_history.json.
     """
-    if not os.path.exists(SCHEDULE_FILE):
-        return None
-        
-    try:
-        with open(SCHEDULE_FILE, 'r') as f:
-            data = json.load(f)
+    date_str = target_date.strftime("%Y-%m-%d")
+    
+    # 1. Try last_schedules.json (current/future)
+    if os.path.exists(SCHEDULE_FILE):
+        try:
+            with open(SCHEDULE_FILE, 'r') as f:
+                data = json.load(f)
             
-        # Priority: Yasno -> Github
-        source = data.get('yasno') or data.get('github')
-        if not source: return None
-        
-        # Get the first group (assuming one group per config)
-        group_key = list(source.keys())[0]
-        schedule_data = source[group_key]
-        
-        date_str = target_date.strftime("%Y-%m-%d")
-        
-        if date_str in schedule_data and schedule_data[date_str].get('slots'):
-             return schedule_data[date_str]['slots']
-             
-        return None
+            # Priority: Yasno -> Github
+            source = data.get('yasno') or data.get('github')
+            if source:
+                group_key = list(source.keys())[0]
+                schedule_data = source[group_key]
+                
+                if date_str in schedule_data and schedule_data[date_str].get('slots'):
+                     return schedule_data[date_str]['slots']
+        except Exception as e:
+            print(f"Error loading schedule: {e}")
+
+    # 2. Try schedule_history.json (past)
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+                if date_str in history:
+                    return history[date_str]
+        except Exception as e:
+            print(f"Error loading history: {e}")
             
-    except Exception as e:
-        print(f"Error loading schedule: {e}")
-        return None
+    return None
 
 def get_intervals_for_date(target_date, events):
     """
@@ -175,8 +181,15 @@ def generate_chart(target_date, intervals, schedule_intervals):
                 duration_days = duration_hours / 24.0
                 ax.broken_barh([(start_num, duration_days)], (sched_y, sched_h), facecolors=color, edgecolor='none')
 
-        # --- Separator Line ---
-        ax.axhline(y=15, color='white', linewidth=0.8, zorder=3)
+        # --- Separator Line (Background Color) ---
+        ax.axhline(y=15, color='#1E122A', linewidth=0.5, zorder=5)
+
+        # --- Hour Markers on the Bars (Background Color) ---
+        hour_points = [mdates.date2num(datetime.datetime.combine(target_date, datetime.time(h, 0))) for h in range(1, 24)]
+        # Cover both Schedule (sched_y) and Actual (act_y + act_h) bars
+        # sched_y = 12.5, sched_h = 2.5 -> top is 15
+        # act_y = 15, act_h = 2.5 -> top is 17.5
+        ax.vlines(hour_points, 12.5, 17.5, colors='#1E122A', linewidth=0.8, zorder=6)
 
         # --- Actual Data (Top Bar) ---
         color_map = {'up': '#4CAF50', 'down': '#EF9A9A', 'unknown': '#C8E6C9'}
@@ -307,9 +320,10 @@ if __name__ == "__main__":
         
         compliance_pct = (t_up / plan_up_sec * 100) if plan_up_sec > 0 else 0
         
-        caption += f"\n\n📉 <b>Аналітика графіку:</b>\n"
-        caption += f" • За планом: <b>{format_duration(plan_up_sec)}</b>\n"
-        caption += f" • Відхилення: <b>{sign}{diff_hours:.1f}год</b> ({compliance_pct:.0f}% від плану)"
+        caption += f"\n\n📉 <b>План vs Факт:</b>\n"
+        caption += f" • За планом світло: <b>{format_duration(plan_up_sec)}</b>\n"
+        caption += f" • Реально світло: <b>{format_duration(t_up)}</b>\n"
+        caption += f" • Відхилення: <b>{sign}{diff_hours:.1f}год</b> (Світла {compliance_pct:.0f}% від плану)"
                
     send_telegram_photo(filename, caption)
     
