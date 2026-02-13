@@ -179,6 +179,10 @@ def generate_weekly_chart(end_date, daily_data):
             # --- Separator Line (Background Color) ---
             ax.axhline(y=y_pos, color='#1E122A', linewidth=0.5, zorder=5)
 
+            # --- Hour Markers on the Bars (Background Color) ---
+            hour_points = [mdates.date2num(datetime.datetime.combine(dummy_date, datetime.time(h, 0))) for h in range(1, 24)]
+            ax.vlines(hour_points, y_pos - 0.45, y_pos + 0.45, colors='#1E122A', linewidth=0.8, zorder=6)
+
             # --- 2. Draw Schedule Data (Bottom Strip) ---
             slots = get_schedule_slots(day_date)
             if slots:
@@ -208,6 +212,7 @@ def generate_weekly_chart(end_date, daily_data):
         ax.set_xlim(mdates.date2num(x_start), mdates.date2num(x_end))
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
         ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+        ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
         
         ax.set_title(f"Енергетичний тиждень ({daily_data[0]['date'].strftime('%d.%m')} - {daily_data[-1]['date'].strftime('%d.%m')})", fontsize=14, color='white')
         
