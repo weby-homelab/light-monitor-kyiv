@@ -3,6 +3,7 @@
 [![CI Status](https://img.shields.io/github/actions/workflow/status/weby-homelab/light-monitor-kyiv/check_outages.yml?branch=main&label=Check%20Outages&style=flat-square&logo=github)](https://github.com/weby-homelab/light-monitor-kyiv/actions/workflows/check_outages.yml)
 [![GitHub release](https://img.shields.io/github/v/release/weby-homelab/light-monitor-kyiv?style=flat-square&color=blueviolet)](https://github.com/weby-homelab/light-monitor-kyiv/releases)
 [![Stars](https://img.shields.io/github/stars/weby-homelab/light-monitor-kyiv?style=flat-square&logo=star)](https://github.com/weby-homelab/light-monitor-kyiv/stargazers)
+[![GitHub Discussions](https://img.shields.io/github/discussions/weby-homelab/light-monitor-kyiv?style=flat-square&logo=github)](https://github.com/weby-homelab/light-monitor-kyiv/discussions)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/github/license/weby-homelab/light-monitor-kyiv?style=flat-square)](LICENSE)
 
