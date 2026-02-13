@@ -147,16 +147,17 @@ TELEGRAM_CHANNEL_ID=-1001234567890
 
 ## 🤝 Внесок у проект (Contributing)
 
-Ми вітаємо будь-які ідеї!
-1.  Fork this repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+Ми вітаємо будь-які ідеї та покращення! Ось як ви можете допомогти:
+
+1.  Зробіть **Fork** цього репозиторію.
+2.  Створіть гілку для вашої фічі (`git checkout -b feature/AmazingFeature`).
+3.  Зафіксуйте зміни (`git commit -m 'Add some AmazingFeature'`).
+4.  Відправте зміни у свій форк (`git push origin feature/AmazingFeature`).
+5.  Відкрийте **Pull Request** у цей репозиторій.
 
 ## 📜 Ліцензія
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Цей проект поширюється під ліцензією **MIT**. Дивіться файл `LICENSE` для детальної інформації.
 
 ---
 *Розроблено з ❤️ у Києві під час блекаутів.*
