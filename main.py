@@ -419,6 +419,7 @@ def format_footer(cfg: dict) -> str:
     now = get_kyiv_now()
     time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
     
+    # Stick separator to previous text, then 2 newlines
     return f"{footer_sep}\n\n{icons['clock']} {txt['updated']}: {time_str} (Київ)"
 
 
@@ -489,9 +490,10 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     if not blocks:
         return None
     
+    body_text = "\n\n".join(blocks).rstrip()
     footer = format_footer(cfg)
     
-    return "\n\n".join(blocks) + footer
+    return body_text + footer
 
 
 # === Telegram ===
