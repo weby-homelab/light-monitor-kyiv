@@ -315,10 +315,10 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     # Schedule Block
                     msg += "\n🗓 <b>Аналіз:</b>\n"
                     if sched_light_now is False: # Should be dark
-                        msg += f"• За графіком: <b>НЕ мало бути до {current_end}</b>\n"
+                        msg += f"• За графіком світло мало з'явитися о: <b>{current_end}</b>\n"
                         msg += f"• Наступне планове: <b>{next_range}</b>"
                     else:
-                        msg += f"• Поточний слот: <b>За графіком МАЄ БУТИ</b>\n"
+                        msg += f"• Зараз за графіком — <b>час зі світлом</b>\n"
                         msg += f"• Наступне вимкнення: <b>{current_end}</b>"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
@@ -378,7 +378,7 @@ def monitor_loop():
                 msg += "\n🗓 <b>Прогноз:</b>\n"
                 if sched_light_now is True: # Should be light
                     msg += f"• Очікуємо за графіком о: <b>{next_range.split(' - ')[0] if ' - ' in next_range else next_range}</b>\n"
-                    msg += f"• Аналіз: <b>За графіком мало бути світло до {current_end}</b>"
+                    msg += f"• Аналіз: <b>За графіком світло мало бути до {current_end}</b>"
                 else:
                     msg += f"• Очікуємо за графіком о: <b>{current_end}</b>"
 
