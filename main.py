@@ -413,15 +413,13 @@ def format_footer(cfg: dict) -> str:
     txt = cfg['ui']['text']
     fmt = cfg['ui']['format']
     
-    footer_sep = fmt.get('separator_footer', '────────────────────')
-    space_before = get_spacing(cfg, 'before_footer', 2)
-    space_after_sep = get_spacing(cfg, 'after_footer_separator', 1)
+    footer_sep = fmt.get('separator_footer', ' - ')
     
     sep = icons.get('separator', '⠅')
     now = get_kyiv_now()
     time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
     
-    return f"{space_before}{footer_sep}{space_after_sep}{icons['clock']} {txt['updated']}: {time_str} (Київ)"
+    return f"{footer_sep}\n\n{icons['clock']} {txt['updated']}: {time_str} (Київ)"
 
 
 def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
@@ -484,7 +482,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                 day_msgs.append(source_separator.join(src_msgs))
         
         if day_msgs:
-            day_separator = f"{space_day}{sep_day}\n"
+            day_separator = f"\n{space_day}{sep_day}\n\n"
             body = day_separator.join(day_msgs)
             blocks.append(f"{header}\n\n{body}")
     
@@ -493,7 +491,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     
     footer = format_footer(cfg)
     
-    return "\n\n\n".join(blocks) + footer
+    return "\n\n".join(blocks) + footer
 
 
 # === Telegram ===
