@@ -321,7 +321,7 @@ def render_summary(periods: list[dict], cfg: dict) -> str:
     else:
         content = render_summary_simple(periods, cfg)
     
-    return f"---\n{content}\n---"
+    return f"\n---\n{content}\n---"
 
 
 def render_table(periods: list[dict], cfg: dict) -> str:
