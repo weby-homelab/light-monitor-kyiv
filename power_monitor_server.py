@@ -316,7 +316,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     msg += "\n🗓 <b>Аналіз:</b>\n"
                     if sched_light_now is False: # Should be dark
                         msg += f"• За графіком світло мало з'явитися о: <b>{current_end}</b>\n"
-                        msg += f"• Наступне планове: <b>{next_range}</b>"
+                        # Extract the END time of the next light slot (when the next outage starts)
+                        next_off_time = next_range.split(' - ')[1] if ' - ' in next_range else "24:00"
+                        msg += f"• Наступне вимкнення: <b>{next_off_time}</b>"
                     else:
                         msg += f"• Зараз за графіком — <b>час зі світлом</b>\n"
                         msg += f"• Наступне вимкнення: <b>{current_end}</b>"
