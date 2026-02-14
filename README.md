@@ -141,9 +141,9 @@ TELEGRAM_CHANNEL_ID=-1001234567890
 | Тип | Вигляд |
 | :--- | :--- |
 | **Alert** | **🟢 18:41 Світло з'явилося**<br>📊 Статистика: відключення 4 год 10 хв<br>🗓 Аналіз: За графіком НЕ мало бути до 21:00<br>• Наступне вимкнення: **23:00** |
-| **Daily Report** | ![Щоденний звіт](https://cdn4.telesco.pe/file/v5cWouED2-pZYT-OEHl4KeIyXM5-0VvT3A2IcF-IIX3wYPP1AvpN5UOOtkl_VEF6y7AKZwHNaVdNGg2T4vQTXIav_Us5neJWvKixmoRCMKJ1y-tpQdO1k6nr5RIpMppQE8FdrIzGacFy13G16mCA1Ms4O-TQvEtqlTZre3j1QzFMRMrxRwGKyZYtAcr7HUMoSj8zoX5yBlJ_OrgnQUJoTlcdrTX4GVWn981Ku0mWsYdzbylGAzimVpnFWVl3Nsay-p4NNr-jh8SkiXcwEq9JlZZnHQIbJoCBDWIPC6NnWCfKQiUcvSZymYoBZXNWQu6iMNdqBDQ-k2LiVaECbGZMpQ.jpg)<br>**📈 План vs Факт:**<br>• За планом: 10 год<br>• Реально: 19.2 год<br>• Відхилення: +9.2 год (192%) |
+| **Daily Report** | ![Щоденний звіт](docs/img/daily_report.jpg)<br>**📈 План vs Факт:**<br>• За планом: 10 год<br>• Реально: 19.2 год<br>• Відхилення: +9.2 год (192%) |
 | **Text Schedule** | **🔆 Графік групи 36.1 🔆**<br><br>📆 14.02 (Субота):<br>✖️ 19:30 - 02:00 … (6.5 год.)<br>---<br>🔆 Світло є: 10 год.<br>✖️ Світла нема: 14 год.<br>---<br>■ ■ ■ |
-| **Weekly Report** | ![Тижневий звіт](https://cdn4.telesco.pe/file/nnFOiOwDY7rSPmB6c7Cv_bXNAmcXWrNyJRKUVgmKldhp6R-ZbdPcl2UkqocMsXX5b7Kcxfa09-6v4t0tl8K6H7qNzfrOncSgnsr0sG1e7Gt5Lgu9arG30_W1cQATEk0JzyLUFaEddO3BBKqDZVvMS5nrfbqpgTDqttXbrZ9OEO6YCyGwM5XRndlDuVUUnUpeKkGyQJL_eCglnshfZZxpgYZ8rEN4XD9SNMuCGWuKmNTYh4aGurQmcdbJTXOoZ5oB9Zg7wJFq9MC6OKiH7_QSmab7HrSSqYCDBM6MHxM01YWtnjw_Qv3oY91_iOC5gNm1UFXf-L8-paTrHVYYqB3CfA.jpg)<br>🏆 **Найкращий день:** Понеділок<br>📝 **Аналіз:** Тиждень був відносно стабільним... |
+| **Weekly Report** | ![Тижневий звіт](docs/img/weekly_report.jpg)<br>🏆 **Найкращий день:** Понеділок<br>📝 **Аналіз:** Тиждень був відносно стабільним... |
 
 ---
 
