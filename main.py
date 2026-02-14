@@ -379,31 +379,31 @@ def render_list(periods: list[dict], cfg: dict) -> str:
     return f"{content}{summary}"
 
 
-def format_day(data: dict, date: datetime, src: str, cfg: dict) -> str:
-    """Format single day message"""
+def render_day_body(periods: list[dict], status: str, cfg: dict) -> str:
+    """Render the body of a day message (status or intervals)"""
     ui = cfg['ui']
     icons = ui['icons']
     txt = ui['text']
     
+    if status == "emergency":
+        return f"{icons['emergency']} {txt['emergency']}"
+    elif status == "pending":
+        return f"{icons['pending']} {txt['pending']}"
+    elif periods:
+        if cfg['settings']['style'] == "table":
+            return render_table(periods, cfg)
+        else:
+            return render_list(periods, cfg)
+    return ""
+
+
+def format_day_header(date: datetime, src: str, cfg: dict) -> str:
+    """Format day header"""
+    icons = cfg['ui']['icons']
     d_str = date.strftime("%d.%m")
     day_name = DAYS_UA[date.weekday()]
     src_name = cfg['sources'].get(src, {}).get('name', src)
-    
-    lines = [f"{icons['calendar']}  {d_str} ({day_name}) [{src_name}]:", ""]
-    
-    st = data.get("status")
-    if st == "emergency":
-        lines.append(f"{icons['emergency']} {txt['emergency']}")
-    elif st == "pending":
-        lines.append(f"{icons['pending']} {txt['pending']}")
-    elif data.get("slots"):
-        periods = slots_to_periods(data["slots"])
-        if cfg['settings']['style'] == "table":
-            lines.append(render_table(periods, cfg))
-        else:
-            lines.append(render_list(periods, cfg))
-    
-    return "\n".join(lines)
+    return f"{icons['calendar']}  {d_str} ({day_name}) [{src_name}]:"
 
 
 def format_footer(cfg: dict) -> str:
@@ -419,15 +419,13 @@ def format_footer(cfg: dict) -> str:
 
 
 def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
-    """Format complete message"""
+    """Format complete message with merged intervals across midnight"""
     groups = cfg['settings']['groups']
     fmt = cfg['ui']['format']
     
     sep_source = fmt['separator_source']
     sep_day = fmt['separator_day']
-    
     space_source = get_spacing(cfg, 'before_separator_source', 1)
-    space_day = get_spacing(cfg, 'before_separator_day', 2)
     
     blocks = []
     
@@ -435,46 +433,107 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
         grp_num = grp.replace("GPV", "")
         header = fmt['header_template'].format(group=grp_num)
         
+        # Collect all dates
         dates = set()
-        if grp in gh:
-            dates.update(gh[grp].keys())
-        if grp in ya:
-            dates.update(ya[grp].keys())
+        if grp in gh: dates.update(gh[grp].keys())
+        if grp in ya: dates.update(ya[grp].keys())
         
-        if not dates:
-            continue
+        if not dates: continue
         
-        day_msgs = []
-        for d_str in sorted(dates)[:2]:
+        sorted_dates = sorted(dates)[:2] # Process today and tomorrow
+        
+        # Prepare data structure for processing
+        # day_data[date_str] = { 'github': {...}, 'yasno': {...}, 'periods': { 'github': [], 'yasno': [] } }
+        day_data_map = {}
+        
+        for d_str in sorted_dates:
+            day_data_map[d_str] = {
+                'date': None,
+                'sources': {}
+            }
+            
+            # Check GitHub
             g_d = gh.get(grp, {}).get(d_str)
+            if g_d:
+                day_data_map[d_str]['date'] = g_d['date']
+                day_data_map[d_str]['sources']['github'] = {
+                    'status': g_d['status'],
+                    'periods': slots_to_periods(g_d['slots']) if g_d['slots'] else []
+                }
+                
+            # Check Yasno
             y_d = ya.get(grp, {}).get(d_str)
+            if y_d:
+                day_data_map[d_str]['date'] = y_d['date'] or day_data_map[d_str]['date']
+                day_data_map[d_str]['sources']['yasno'] = {
+                    'status': y_d['status'],
+                    'periods': slots_to_periods(y_d['slots']) if y_d['slots'] else []
+                }
+
+        # --- Merge Logic ---
+        # Only merge if we have 2 consecutive days
+        if len(sorted_dates) == 2:
+            d1, d2 = sorted_dates[0], sorted_dates[1]
             
-            if not g_d and not y_d:
-                continue
+            for src in ['github', 'yasno']:
+                if src in day_data_map[d1]['sources'] and src in day_data_map[d2]['sources']:
+                    p1 = day_data_map[d1]['sources'][src]['periods']
+                    p2 = day_data_map[d2]['sources'][src]['periods']
+                    
+                    if p1 and p2:
+                        last_p1 = p1[-1]
+                        first_p2 = p2[0]
+                        
+                        if last_p1['is_on'] == first_p2['is_on']:
+                            # Merge!
+                            # Add hours
+                            last_p1['hours'] += first_p2['hours']
+                            # Update end time text (e.g., from "24:00" to "02:00")
+                            last_p1['end'] = first_p2['end']
+                            
+                            # Remove first period from day 2
+                            p2.pop(0)
+                            
+        # --- Rendering ---
+        day_msgs = []
+        for d_str in sorted_dates:
+            data = day_data_map[d_str]
+            if not data['sources']: continue
             
-            dt = (g_d or y_d)["date"]
+            dt = data['date']
             src_msgs = []
             
+            # Check for match (if both sources exist and are identical)
             match = False
-            if g_d and y_d:
-                if g_d['status'] == 'normal' and y_d['status'] == 'normal':
-                    if g_d['slots'] == y_d['slots']:
+            gh_s = data['sources'].get('github')
+            ya_s = data['sources'].get('yasno')
+            
+            if gh_s and ya_s:
+                if gh_s['status'] == 'normal' and ya_s['status'] == 'normal':
+                    # Compare periods (they might be modified, so compare structure)
+                    if gh_s['periods'] == ya_s['periods']:
                         match = True
             
             if match:
                 gh_name = cfg['sources']['github']['name']
                 ya_name = cfg['sources']['yasno']['name']
-                base = format_day(g_d, dt, "github", cfg)
-                base = base.replace(f"[{gh_name}]", f"[{gh_name}, {ya_name}]")
-                src_msgs.append(base)
+                
+                head = format_day_header(dt, "github", cfg)
+                head = head.replace(f"[{gh_name}]", f"[{gh_name}, {ya_name}]")
+                body = render_day_body(gh_s['periods'], gh_s['status'], cfg)
+                src_msgs.append(f"{head}\n\n{body}")
             else:
-                if g_d:
-                    src_msgs.append(format_day(g_d, dt, "github", cfg))
-                if y_d:
-                    src_msgs.append(format_day(y_d, dt, "yasno", cfg))
+                if gh_s:
+                    head = format_day_header(dt, "github", cfg)
+                    body = render_day_body(gh_s['periods'], gh_s['status'], cfg)
+                    src_msgs.append(f"{head}\n\n{body}")
+                if ya_s:
+                    head = format_day_header(dt, "yasno", cfg)
+                    body = render_day_body(ya_s['periods'], ya_s['status'], cfg)
+                    src_msgs.append(f"{head}\n\n{body}")
             
             if src_msgs:
-                source_separator = f"{space_source}{sep_source}\n"
+                source_separator = f"\n{space_source}{sep_source}\n"
                 day_msgs.append(source_separator.join(src_msgs))
         
         if day_msgs:
