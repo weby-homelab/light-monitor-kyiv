@@ -483,7 +483,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                 day_msgs.append(source_separator.join(src_msgs))
         
         if day_msgs:
-            day_separator = f"\n{space_day}{sep_day}\n\n"
+            day_separator = f"\n{sep_day}\n"
             body = day_separator.join(day_msgs)
             blocks.append(f"{header}\n\n{body}")
     
