@@ -304,9 +304,8 @@ def render_summary_simple(periods: list[dict], cfg: dict) -> str:
 
 
 def render_summary(periods: list[dict], cfg: dict) -> str:
-    """Render summary with spacing"""
+    """Render summary with --- separators"""
     show_detail = cfg['settings'].get('show_intervals_detail', False)
-    spacing = get_spacing(cfg, 'before_summary', 2)
     
     if show_detail:
         on_detail = render_intervals_detail(periods, True, cfg)
@@ -322,7 +321,7 @@ def render_summary(periods: list[dict], cfg: dict) -> str:
     else:
         content = render_summary_simple(periods, cfg)
     
-    return f"{spacing}{content}"
+    return f"---\n{content}\n---"
 
 
 def render_table(periods: list[dict], cfg: dict) -> str:
@@ -408,19 +407,15 @@ def format_day(data: dict, date: datetime, src: str, cfg: dict) -> str:
 
 
 def format_footer(cfg: dict) -> str:
-    """Format footer with separator and update time"""
+    """Format footer with update time"""
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
-    fmt = cfg['ui']['format']
-    
-    footer_sep = fmt.get('separator_footer', ' - ')
     
     sep = icons.get('separator', '⠅')
     now = get_kyiv_now()
     time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
     
-    # Stick separator to previous text, then 2 newlines
-    return f"{footer_sep}\n\n{icons['clock']} {txt['updated']}: {time_str} (Київ)"
+    return f"{icons['clock']} {txt['updated']}: {time_str} (Київ)"
 
 
 def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
@@ -493,7 +488,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     body_text = "\n\n".join(blocks).rstrip()
     footer = format_footer(cfg)
     
-    return body_text + footer
+    return f"{body_text}\n{footer}"
 
 
 # === Telegram ===
