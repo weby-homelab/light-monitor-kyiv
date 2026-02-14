@@ -52,17 +52,10 @@ def get_kyiv_now() -> datetime:
 
 
 def format_hours_full(hours: float) -> str:
-    """Format hours with full Ukrainian declension"""
+    """Format hours with shortened 'год.' suffix"""
     if hours == int(hours):
         hours = int(hours)
-    
-    if isinstance(hours, float):
-        return f"{hours} години"
-    if hours % 10 == 1 and hours % 100 != 11:
-        return f"{hours} година"
-    if hours % 10 in [2, 3, 4] and hours % 100 not in [12, 13, 14]:
-        return f"{hours} години"
-    return f"{hours} годин"
+    return f"{hours} год."
 
 
 def format_hours_short(hours: float, cfg: dict) -> str:
