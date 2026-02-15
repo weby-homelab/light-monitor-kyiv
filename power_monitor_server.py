@@ -137,29 +137,38 @@ def get_schedule_context():
         
         # Format end time
         def format_idx_to_time(idx):
+            if idx >= 96: return "кінець завтрашньої доби"
             day_offset = idx // 48
             rem_idx = idx % 48
             h = rem_idx // 2
             m = 30 if rem_idx % 2 else 0
-            if day_offset > 0:
+            
+            if day_offset == 0:
+                return f"{h:02d}:{m:02d}"
+            elif day_offset == 1:
                 return f"завтра о {h:02d}:{m:02d}"
-            return f"{h:02d}:{m:02d}"
+            else:
+                return "післязавтра"
 
         t_end = format_idx_to_time(end_idx)
-        if end_idx >= 96: t_end = "кінець завтрашньої доби"
         
         # Find next block range
         next_start_idx = end_idx
         if next_start_idx < len(slots):
-            next_end_idx = len(slots)
-            for i in range(next_start_idx + 1, len(slots)):
-                if slots[i] == is_light_now:
-                    next_end_idx = i
-                    break
-            
-            ns_t = format_idx_to_time(next_start_idx)
-            ne_t = format_idx_to_time(next_end_idx)
-            next_range = f"{ns_t} - {ne_t}"
+            # If we need to show the range of the NEXT block
+            # But the next block is in tomorrow and tomorrow is empty/padded
+            if next_start_idx >= 48 and (tomorrow_str not in schedule_data or not schedule_data[tomorrow_str].get('slots')):
+                next_range = "невідомо (графік на завтра очікується)"
+            else:
+                next_end_idx = len(slots)
+                for i in range(next_start_idx + 1, len(slots)):
+                    if slots[i] == is_light_now:
+                        next_end_idx = i
+                        break
+                
+                ns_t = format_idx_to_time(next_start_idx)
+                ne_t = format_idx_to_time(next_end_idx)
+                next_range = f"{ns_t} - {ne_t}"
         else:
             next_range = "невідомо"
             
