@@ -137,7 +137,7 @@ def get_schedule_context():
         
         # Format end time
         def format_idx_to_time(idx):
-            if idx >= 96: return "кінець завтрашньої доби"
+            if idx >= 96: return "час очікується"
             day_offset = idx // 48
             rem_idx = idx % 48
             h = rem_idx // 2
@@ -158,7 +158,7 @@ def get_schedule_context():
             # If we need to show the range of the NEXT block
             # But the next block is in tomorrow and tomorrow is empty/padded
             if next_start_idx >= 48 and (tomorrow_str not in schedule_data or not schedule_data[tomorrow_str].get('slots')):
-                next_range = "невідомо (графік на завтра очікується)"
+                next_range = "час очікується"
             else:
                 next_end_idx = len(slots)
                 for i in range(next_start_idx + 1, len(slots)):
@@ -170,7 +170,7 @@ def get_schedule_context():
                 ne_t = format_idx_to_time(next_end_idx)
                 next_range = f"{ns_t} - {ne_t}"
         else:
-            next_range = "невідомо"
+            next_range = "час очікується"
             
         return (is_light_now, t_end, next_range)
             
