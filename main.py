@@ -463,6 +463,22 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                     'periods': slots_to_periods(y_d['slots']) if y_d['slots'] else []
                 }
 
+        # --- Filter "Tomorrow" if empty/pending ---
+        # We don't want to show "Pending" for tomorrow if we have nothing useful yet.
+        if len(sorted_dates) > 1:
+            tomorrow_str = sorted_dates[1]
+            tomorrow_data = day_data_map[tomorrow_str]
+            
+            has_useful_data = False
+            for src_key, src_val in tomorrow_data['sources'].items():
+                if src_val['status'] == 'normal' and src_val['periods']:
+                    has_useful_data = True
+                    break
+            
+            if not has_useful_data:
+                # Remove tomorrow from processing list
+                sorted_dates.pop()
+
         # --- Merge Logic ---
         # Only merge if we have 2 consecutive days
         if len(sorted_dates) == 2:
