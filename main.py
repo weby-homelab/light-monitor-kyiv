@@ -603,6 +603,9 @@ def manage_msgs(mid: int, cfg: dict):
 # === Main ===
 
 def main():
+    import sys
+    force_send = "--force" in sys.argv
+    
     cfg = load_config()
     
     print(f"Region: {cfg['settings']['region']}")
@@ -674,10 +677,13 @@ def main():
 
     old_c = get_cache()
     
-    if new_c == old_c:
+    if new_c == old_c and not force_send:
         print("No changes.")
         return
     
+    if force_send:
+        print("Force send enabled.")
+        
     print("Updates detected!")
     msg = format_msg(gh_sched, ya_sched, cfg)
     
