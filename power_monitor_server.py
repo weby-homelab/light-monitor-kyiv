@@ -110,41 +110,58 @@ def get_schedule_context():
         
         now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
         today_str = now.strftime("%Y-%m-%d")
+        tomorrow_str = (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         
         if today_str not in schedule_data or not schedule_data[today_str].get('slots'):
             return (None, None, "Графік відсутній")
             
-        slots = schedule_data[today_str]['slots']
+        # Combine today and tomorrow slots for a 48h view (96 slots)
+        slots = list(schedule_data[today_str]['slots'])
+        if tomorrow_str in schedule_data and schedule_data[tomorrow_str].get('slots'):
+            slots.extend(schedule_data[tomorrow_str]['slots'])
+        else:
+            # If no tomorrow data, pad with the last state of today
+            slots.extend([slots[-1]] * 48)
+            
         current_slot_idx = (now.hour * 2) + (1 if now.minute >= 30 else 0)
         
         # True = Light, False = Outage
         is_light_now = slots[current_slot_idx]
         
-        # Find end of current block
-        end_idx = 48
-        for i in range(current_slot_idx + 1, 48):
+        # Find end of current block (max 96 slots)
+        end_idx = len(slots)
+        for i in range(current_slot_idx + 1, len(slots)):
             if slots[i] != is_light_now:
                 end_idx = i
                 break
         
-        t_end = f"{end_idx//2:02}:{ '30' if end_idx%2 and end_idx<48 else '00'}"
-        if end_idx == 48: t_end = "23:59"
+        # Format end time
+        def format_idx_to_time(idx):
+            day_offset = idx // 48
+            rem_idx = idx % 48
+            h = rem_idx // 2
+            m = 30 if rem_idx % 2 else 0
+            if day_offset > 0:
+                return f"завтра о {h:02d}:{m:02d}"
+            return f"{h:02d}:{m:02d}"
+
+        t_end = format_idx_to_time(end_idx)
+        if end_idx >= 96: t_end = "кінець завтрашньої доби"
         
         # Find next block range
         next_start_idx = end_idx
-        if next_start_idx < 48:
-            next_end_idx = 48
-            for i in range(next_start_idx + 1, 48):
+        if next_start_idx < len(slots):
+            next_end_idx = len(slots)
+            for i in range(next_start_idx + 1, len(slots)):
                 if slots[i] == is_light_now:
                     next_end_idx = i
                     break
             
-            ns_t = f"{next_start_idx//2:02}:{ '30' if next_start_idx%2 else '00'}"
-            ne_t = f"{next_end_idx//2:02}:{ '30' if next_end_idx%2 and next_end_idx<48 else '00'}"
-            if next_end_idx == 48: ne_t = "23:59"
+            ns_t = format_idx_to_time(next_start_idx)
+            ne_t = format_idx_to_time(next_end_idx)
             next_range = f"{ns_t} - {ne_t}"
         else:
-            next_range = "до кінця доби"
+            next_range = "невідомо"
             
         return (is_light_now, t_end, next_range)
             
