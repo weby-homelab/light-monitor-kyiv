@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import requests
 import sys
+import shutil
 
 # --- Configuration ---
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -13,6 +14,7 @@ CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 EVENT_LOG_FILE = "event_log.json"
 SCHEDULE_FILE = "last_schedules.json"
 HISTORY_FILE = "schedule_history.json"
+REPORT_ID_FILE = "daily_report_id.json"
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 def load_events():
@@ -265,6 +267,57 @@ def generate_chart(target_date, intervals, schedule_intervals):
         
     return filename, total_up, total_down
 
+def get_last_report_id():
+    if os.path.exists(REPORT_ID_FILE):
+        try:
+            with open(REPORT_ID_FILE, 'r') as f:
+                data = json.load(f)
+                # Check if the report ID is for today
+                if data.get('date') == datetime.datetime.now(KYIV_TZ).strftime("%Y-%m-%d"):
+                    return data.get('message_id')
+        except:
+            pass
+    return None
+
+def save_report_id(message_id):
+    try:
+        with open(REPORT_ID_FILE, 'w') as f:
+            json.dump({
+                'date': datetime.datetime.now(KYIV_TZ).strftime("%Y-%m-%d"),
+                'message_id': message_id
+            }, f)
+    except:
+        pass
+
+def update_telegram_photo(message_id, photo_path, caption):
+    url = f"https://api.telegram.org/bot{TOKEN}/editMessageMedia"
+    
+    media_json = json.dumps({
+        'type': 'photo',
+        'media': 'attach://chart',
+        'caption': caption,
+        'parse_mode': 'HTML'
+    })
+    
+    with open(photo_path, 'rb') as f:
+        files = {'chart': f}
+        data = {
+            'chat_id': CHAT_ID,
+            'message_id': message_id,
+            'media': media_json
+        }
+        try:
+            r = requests.post(url, files=files, data=data, timeout=20)
+            if r.status_code == 200:
+                print("Report updated successfully.")
+                return True
+            else:
+                print(f"Failed to update report: {r.text}")
+                return False
+        except Exception as e:
+            print(f"Error updating report: {e}")
+            return False
+
 def send_telegram_photo(photo_path, caption):
     url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
     with open(photo_path, 'rb') as f:
@@ -274,6 +327,10 @@ def send_telegram_photo(photo_path, caption):
             r = requests.post(url, files=files, data=data, timeout=10)
             if r.status_code == 200:
                 print("Report sent successfully.")
+                res = r.json()
+                if res.get('ok'):
+                    msg_id = res['result']['message_id']
+                    save_report_id(msg_id)
             else:
                 print(f"Failed to send report: {r.text}")
         except Exception as e:
@@ -308,7 +365,6 @@ if __name__ == "__main__":
     filename, t_up, t_down = generate_chart(target_date, intervals, sched_intervals)
     
     # Save copy for Web Dashboard
-    import shutil
     web_dir = "web"
     if not os.path.exists(web_dir): os.makedirs(web_dir)
     shutil.copy(filename, os.path.join(web_dir, "chart.png"))
@@ -333,7 +389,16 @@ if __name__ == "__main__":
         caption += f" • Відхилення: <b>{sign}{diff_hours:.1f}год</b> (Світла {compliance_pct:.0f}% від плану)"
                
     if "--no-send" not in sys.argv:
-        send_telegram_photo(filename, caption)
+        # Check if we can update an existing message
+        last_id = get_last_report_id()
+        sent = False
+        if last_id:
+            print(f"Updating existing report (ID: {last_id})...")
+            sent = update_telegram_photo(last_id, filename, caption)
+        
+        if not sent:
+            print("Sending new report...")
+            send_telegram_photo(filename, caption)
     else:
         print("Telegram sending skipped (--no-send).")
     
