@@ -296,25 +296,45 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             <head>
                 <title>Power Monitor Status</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta http-equiv="refresh" content="60">
                 <style>
-                    body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 50px; }}
+                    body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 20px; }}
+                    .container {{ max-width: 800px; margin: 0 auto; }}
                     .status {{ font-size: 48px; font-weight: bold; color: {status_color}; margin: 20px; }}
-                    .info {{ font-size: 20px; color: #CCC; }}
+                    .info {{ font-size: 20px; color: #CCC; margin-bottom: 30px; }}
+                    .chart {{ width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
                     .footer {{ margin-top: 50px; font-size: 14px; color: #666; }}
                 </style>
             </head>
             <body>
-                <h1>Монітор живлення</h1>
-                <div class="status">{status_text}</div>
-                <div class="info">
-                    Тривалість стану: <b>{duration}</b><br>
-                    Останній сигнал (heartbeat): <b>{last_ping}</b>
+                <div class="container">
+                    <h1>Монітор живлення</h1>
+                    <div class="status">{status_text}</div>
+                    <div class="info">
+                        Тривалість стану: <b>{duration}</b><br>
+                        Останній сигнал: <b>{last_ping}</b>
+                    </div>
+                    <img src="/chart.png" class="chart" alt="Графік за сьогодні">
+                    <div class="footer">HTZNR Server | Light Monitor Kyiv v1.9</div>
                 </div>
-                <div class="footer">HTZNR Server | Light Monitor Kyiv v1.8</div>
             </body>
             </html>
             """
             self.wfile.write(html.encode('utf-8'))
+            return
+
+        # 1.5 Chart Image
+        if parsed.path == "/chart.png":
+            chart_path = "web/chart.png"
+            if os.path.exists(chart_path):
+                self.send_response(200)
+                self.send_header("Content-type", "image/png")
+                self.end_headers()
+                with open(chart_path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
             return
 
         # 2. Push API

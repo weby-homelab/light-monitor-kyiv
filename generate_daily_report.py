@@ -67,12 +67,12 @@ def get_intervals_for_date(target_date, events):
     """
     
     # Target date range
-    day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-    day_end = datetime.datetime.combine(target_date, datetime.time.max).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+    day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=KYIV_TZ)
+    day_end = datetime.datetime.combine(target_date, datetime.time.max).replace(tzinfo=KYIV_TZ)
     
     # If target is today, clip the calculation end to NOW for stats, 
     # but the chart X-axis will still cover the full day.
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+    now = datetime.datetime.now(KYIV_TZ)
     if target_date == now.date():
         calc_end = now
     else:
@@ -98,7 +98,7 @@ def get_intervals_for_date(target_date, events):
     # Iterate through events strictly within the day
     for event in events:
         event_ts = event['timestamp']
-        event_dt = datetime.datetime.fromtimestamp(event_ts, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        event_dt = datetime.datetime.fromtimestamp(event_ts, KYIV_TZ)
         
         if event_dt < day_start:
             continue
@@ -126,7 +126,7 @@ def get_schedule_intervals(target_date, slots):
     if not slots: return []
     
     intervals = []
-    day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+    day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=KYIV_TZ)
     
     current_state = slots[0]
     start_idx = 0
@@ -280,11 +280,16 @@ def send_telegram_photo(photo_path, caption):
             print(f"Error sending report: {e}")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        date_str = sys.argv[1]
-        target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-    else:
-        target_date = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).date()
+    target_date = datetime.datetime.now(KYIV_TZ).date()
+    
+    # Simple argument parsing
+    for arg in sys.argv[1:]:
+        if arg == "--no-send":
+            continue
+        try:
+            target_date = datetime.datetime.strptime(arg, "%Y-%m-%d").date()
+        except ValueError:
+            pass # Ignore non-date arguments
         
     print(f"Generating report for {target_date}...")
     
@@ -295,12 +300,18 @@ if __name__ == "__main__":
     sched_intervals = get_schedule_intervals(target_date, slots)
     
     if not intervals:
-        day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=KYIV_TZ)
+        now = datetime.datetime.now(KYIV_TZ)
         calc_end = now if target_date == now.date() else day_start + datetime.timedelta(hours=24)
         intervals = [(day_start, calc_end, "unknown")]
 
     filename, t_up, t_down = generate_chart(target_date, intervals, sched_intervals)
+    
+    # Save copy for Web Dashboard
+    import shutil
+    web_dir = "web"
+    if not os.path.exists(web_dir): os.makedirs(web_dir)
+    shutil.copy(filename, os.path.join(web_dir, "chart.png"))
     
     caption = (f"📊 <b>Звіт за {target_date.strftime('%d.%m.%Y')}</b>\n\n"
                f"💡 Світло було: <b>{format_duration(t_up)}</b>\n"
@@ -321,7 +332,10 @@ if __name__ == "__main__":
         caption += f" • Реально світло: <b>{format_duration(t_up)}</b>\n"
         caption += f" • Відхилення: <b>{sign}{diff_hours:.1f}год</b> (Світла {compliance_pct:.0f}% від плану)"
                
-    send_telegram_photo(filename, caption)
+    if "--no-send" not in sys.argv:
+        send_telegram_photo(filename, caption)
+    else:
+        print("Telegram sending skipped (--no-send).")
     
     if os.path.exists(filename):
         os.remove(filename)
