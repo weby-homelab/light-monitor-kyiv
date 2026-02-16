@@ -8,6 +8,7 @@ import secrets
 import datetime
 from zoneinfo import ZoneInfo
 import requests
+import subprocess
 from urllib.parse import urlparse, parse_qs
 
 # --- Configuration ---
@@ -30,6 +31,26 @@ state = {
 }
 
 state_lock = threading.RLock()
+
+def trigger_daily_report_update():
+    """
+    Triggers the generation and update of the daily report chart.
+    Runs asynchronously to not block the main thread.
+    """
+    def run_script():
+        try:
+            print("Triggering daily report update...")
+            # Assuming we are running in the project root or venv is available
+            # We use absolute path to be safe based on service file
+            python_exec = "/root/geminicli/light-monitor-kyiv/venv/bin/python"
+            script_path = "/root/geminicli/light-monitor-kyiv/generate_daily_report.py"
+            
+            # Run without --no-send so it updates Telegram
+            subprocess.run([python_exec, script_path], check=True)
+        except Exception as e:
+            print(f"Failed to trigger daily report: {e}")
+
+    threading.Thread(target=run_script).start()
 
 def log_event(event_type, timestamp):
     """
@@ -403,6 +424,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         msg += f"• Наступне вимкнення: <b>{current_end}</b>"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
+                    trigger_daily_report_update()
                 
                 save_state()
             
@@ -467,6 +489,7 @@ def monitor_loop():
                     msg += f"• Очікуємо за графіком о: <b>{current_end}</b>"
 
                 threading.Thread(target=send_telegram, args=(msg,)).start()
+                trigger_daily_report_update()
                 save_state()
 
 # --- Main Execution ---
