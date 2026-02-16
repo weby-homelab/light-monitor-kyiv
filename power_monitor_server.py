@@ -405,7 +405,10 @@ def monitor_loop():
                 # Schedule Block
                 msg += "\n🗓 <b>Прогноз:</b>\n"
                 if sched_light_now is True: # Should be light
-                    msg += f"• Очікуємо за графіком о: <b>{next_range.split(' - ')[0] if ' - ' in next_range else next_range}</b>\n"
+                    # next_range describes the upcoming DARK slot (e.g. 13:00 - 20:00)
+                    # We want to know when light returns, which is the END of that slot (20:00)
+                    expected_return = next_range.split(' - ')[1] if ' - ' in next_range else "невідомо"
+                    msg += f"• Очікуємо за графіком о: <b>{expected_return}</b>\n"
                     msg += f"• Аналіз: <b>За графіком світло мало бути до {current_end}</b>"
                 else:
                     msg += f"• Очікуємо за графіком о: <b>{current_end}</b>"
