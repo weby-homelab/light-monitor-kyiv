@@ -383,6 +383,20 @@ if __name__ == "__main__":
         
         compliance_pct = (t_up / plan_up_sec * 100) if plan_up_sec > 0 else 0
         
+        # Save stats for Web Dashboard
+        try:
+            stats_data = {
+                "plan_up": format_duration(plan_up_sec),
+                "fact_up": format_duration(t_up),
+                "diff": diff_hours,
+                "pct": int(compliance_pct),
+                "updated_at": datetime.datetime.now(KYIV_TZ).strftime("%H:%M")
+            }
+            with open(os.path.join(web_dir, "stats.json"), "w") as f:
+                json.dump(stats_data, f)
+        except Exception as e:
+            print(f"Error saving stats json: {e}")
+        
         caption += f"\n\n📉 <b>План vs Факт:</b>\n"
         caption += f" • За планом світло: <b>{format_duration(plan_up_sec)}</b>\n"
         caption += f" • Реально світло: <b>{format_duration(t_up)}</b>\n"

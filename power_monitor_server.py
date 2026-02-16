@@ -324,6 +324,28 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             except:
                 pass
 
+            # Get Analytics
+            analytics_html = ""
+            page_updated = datetime.datetime.now(KYIV_TZ).strftime("%d.%m.%Y %H:%M:%S")
+            try:
+                stats_file = "web/stats.json"
+                if os.path.exists(stats_file):
+                    with open(stats_file, 'r') as f:
+                        s = json.load(f)
+                        sign = "+" if s['diff'] > 0 else ""
+                        diff_str = f"{sign}{s['diff']:.1f}год"
+                        
+                        analytics_html = f"""
+                        <div class="analytics" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: left; display: inline-block;">
+                            <h3 style="margin-top: 0; color: #BBB;">📉 План vs Факт</h3>
+                            <div>• За планом: <b>{s['plan_up']}</b></div>
+                            <div>• Реально: <b>{s['fact_up']}</b></div>
+                            <div>• Відхилення: <b>{diff_str}</b> ({s['pct']}% від плану)</div>
+                        </div>
+                        """
+            except Exception as e:
+                print(f"Error reading stats: {e}")
+
             html = f"""
             <!DOCTYPE html>
             <html>
@@ -351,7 +373,8 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     </div>
                     <img src="/chart.png" class="chart" alt="Графік за сьогодні">
                     <div class="group">{group_name}</div>
-                    <div class="footer">HTZNR Server | Light Monitor Kyiv v1.9</div>
+                    {analytics_html}
+                    <div class="footer">HTZNR Server | Оновлено: {page_updated}</div>
                 </div>
             </body>
             </html>
