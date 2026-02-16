@@ -290,6 +290,19 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 if state["last_seen"] > 0:
                     last_ping = datetime.datetime.fromtimestamp(state["last_seen"], KYIV_TZ).strftime("%H:%M:%S")
 
+            # Get Group Name
+            group_name = "Невідома група"
+            try:
+                if os.path.exists(SCHEDULE_FILE):
+                    with open(SCHEDULE_FILE, 'r') as f:
+                        sched_data = json.load(f)
+                        src = sched_data.get('yasno') or sched_data.get('github')
+                        if src:
+                            group_key = list(src.keys())[0]
+                            group_name = group_key.replace("GPV", "Група ")
+            except:
+                pass
+
             html = f"""
             <!DOCTYPE html>
             <html>
@@ -303,6 +316,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     .status {{ font-size: 48px; font-weight: bold; color: {status_color}; margin: 20px; }}
                     .info {{ font-size: 20px; color: #CCC; margin-bottom: 30px; }}
                     .chart {{ width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
+                    .group {{ margin-top: 10px; font-size: 18px; color: #BBB; font-weight: bold; }}
                     .footer {{ margin-top: 50px; font-size: 14px; color: #666; }}
                 </style>
             </head>
@@ -315,6 +329,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         Останній сигнал: <b>{last_ping}</b>
                     </div>
                     <img src="/chart.png" class="chart" alt="Графік за сьогодні">
+                    <div class="group">{group_name}</div>
                     <div class="footer">HTZNR Server | Light Monitor Kyiv v1.9</div>
                 </div>
             </body>
