@@ -1,12 +1,13 @@
 import json
 import os
 import datetime
+from zoneinfo import ZoneInfo
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import requests
 import sys
 # Import necessary functions from the daily report script to reuse logic
-from generate_daily_report import load_events, get_intervals_for_date, format_duration, TZ_OFFSET
+from generate_daily_report import load_events, get_intervals_for_date, format_duration, KYIV_TZ
 
 # --- Configuration ---
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -145,7 +146,7 @@ def generate_weekly_chart(end_date, daily_data):
             y_ticks.append(y_pos)
             
             # --- 1. Draw Actual Data (Top Strip) ---
-            now_kyiv = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+            now_kyiv = datetime.datetime.now(KYIV_TZ)
             
             # Only draw actual data if the day is not in the future
             if day_date <= now_kyiv.date():

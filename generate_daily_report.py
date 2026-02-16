@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+from zoneinfo import ZoneInfo
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import requests
@@ -12,7 +13,7 @@ CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 EVENT_LOG_FILE = "event_log.json"
 SCHEDULE_FILE = "last_schedules.json"
 HISTORY_FILE = "schedule_history.json"
-TZ_OFFSET = 2  # UTC+2 (EET)
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 def load_events():
     if not os.path.exists(EVENT_LOG_FILE):
@@ -57,7 +58,8 @@ def load_schedule_slots(target_date):
         except Exception as e:
             print(f"Error loading history: {e}")
             
-    return None
+    # If no schedule found, assume Light (True) for the whole day
+    return [True] * 48
 
 def get_intervals_for_date(target_date, events):
     """
@@ -168,8 +170,8 @@ def generate_chart(target_date, intervals, schedule_intervals):
         act_y = 15
         act_h = 2.5
         
-        day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-        day_end = datetime.datetime.combine(target_date, datetime.time.max).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        day_start = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=KYIV_TZ)
+        day_end = datetime.datetime.combine(target_date, datetime.time.max).replace(tzinfo=KYIV_TZ)
         
         # --- Schedule Data (Bottom Bar) ---
         sched_color_map = {True: '#FFF59D', False: '#BDBDBD'} # Light Yellow, Gray
@@ -187,7 +189,7 @@ def generate_chart(target_date, intervals, schedule_intervals):
         # --- Hour Markers on the Bars (Background Color) ---
         hour_points = []
         for h in range(0, 25):
-            point_time = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))) + datetime.timedelta(hours=h)
+            point_time = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=KYIV_TZ) + datetime.timedelta(hours=h)
             hour_points.append(mdates.date2num(point_time))
             
         # Draw vertical lines across the bars to act as hour markers
@@ -222,15 +224,6 @@ def generate_chart(target_date, intervals, schedule_intervals):
             if end > last_actual_end:
                 last_actual_end = end
 
-        # --- Future Bar ---
-        if last_actual_end < day_end:
-            start_num = mdates.date2num(last_actual_end)
-            end_num = mdates.date2num(day_end)
-            duration_num = end_num - start_num
-            
-            # Dark purple-grey for "future" in dark purple mode
-            ax.broken_barh([(start_num, duration_num)], (act_y, act_h), facecolors='#3D2E4A', edgecolor='#5D4E6A', hatch='///', linewidth=0.5)
-
         # --- Formatting ---
         ax.set_ylim(11, 19) 
         ax.set_xlim(mdates.date2num(day_start), mdates.date2num(day_end))
@@ -240,9 +233,9 @@ def generate_chart(target_date, intervals, schedule_intervals):
         ax.spines['left'].set_visible(False)
         ax.spines['bottom'].set_color('white')
         
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M', tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=2, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
-        ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1, tz=datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M', tz=KYIV_TZ))
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=2, tz=KYIV_TZ))
+        ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1, tz=KYIV_TZ))
         
         ax.tick_params(axis='x', colors='white')
         ax.tick_params(axis='y', colors='white')

@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import datetime
+from zoneinfo import ZoneInfo
 import requests
 from urllib.parse import urlparse, parse_qs
 
@@ -17,7 +18,7 @@ PORT = 8889
 STATE_FILE = "power_monitor_state.json"
 SCHEDULE_FILE = "last_schedules.json"
 EVENT_LOG_FILE = "event_log.json"
-TZ_OFFSET = 2  # UTC+2 (EET), adjust for DST manually or use pytz if available (avoiding extra deps for now)
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 # --- State Management ---
 state = {
@@ -38,7 +39,7 @@ def log_event(event_type, timestamp):
         entry = {
             "timestamp": timestamp,
             "event": event_type,
-            "date_str": datetime.datetime.fromtimestamp(timestamp, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%Y-%m-%d %H:%M:%S")
+            "date_str": datetime.datetime.fromtimestamp(timestamp, KYIV_TZ).strftime("%Y-%m-%d %H:%M:%S")
         }
         
         # Read existing logs or create new list
@@ -108,7 +109,7 @@ def get_schedule_context():
         group_key = list(source.keys())[0]
         schedule_data = source[group_key]
         
-        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        now = datetime.datetime.now(KYIV_TZ)
         today_str = now.strftime("%Y-%m-%d")
         tomorrow_str = (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         
@@ -216,7 +217,7 @@ def get_deviation_info(event_time, is_up):
         schedule_data = source[group_key]
         
         # Localize event time
-        dt = datetime.datetime.fromtimestamp(event_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
+        dt = datetime.datetime.fromtimestamp(event_time, KYIV_TZ)
         date_str = dt.strftime("%Y-%m-%d")
         
         if date_str not in schedule_data or not schedule_data[date_str].get('slots'):
@@ -224,71 +225,40 @@ def get_deviation_info(event_time, is_up):
             
         slots = schedule_data[date_str]['slots']
         
-        # Current slot index (0-47)
-        # 12:35 -> 12*2 + 1 = 25 (12:30-13:00)
-        current_idx = (dt.hour * 2) + (1 if dt.minute >= 30 else 0)
-        
         # Find nearest transition
-        # We look for index 'i' where slots[i] != slots[i-1]
-        # Transition happens exactly at start of slot 'i' (i*30 min from start of day)
-        
         best_diff = 9999
         transition_type = None # 'up' or 'down'
         
-        # Check all possible transition points in the day (0..48)
-        # 0 is start of day (00:00), 48 is end of day (24:00)
         for i in range(49):
-            # Determine state before and after point i
-            # State BEFORE point i is slots[i-1] (if i>0)
-            # State AFTER point i is slots[i] (if i<48)
+            state_before = slots[i-1] if i > 0 else slots[0] 
+            state_after = slots[i] if i < 48 else slots[47] 
             
-            state_before = slots[i-1] if i > 0 else slots[0] # assume start matches 00:00 state
-            state_after = slots[i] if i < 48 else slots[47] # assume end matches 23:30 state
-            
-            if i == 0: state_before = not state_after # Force check at 00:00? No, rely on prev day? Simpler: ignore 00:00 unless explicit change
+            if i == 0: state_before = not state_after 
             
             if state_before != state_after:
-                # Found transition at point i
-                # Time of transition: i * 30 minutes from 00:00
                 trans_h = i // 2
                 trans_m = 30 if i % 2 else 0
                 
-                # Create naive datetime for transition
                 trans_dt = dt.replace(hour=trans_h, minute=trans_m, second=0, microsecond=0)
-                
-                # Diff in minutes
                 diff = (dt - trans_dt).total_seconds() / 60
                 
                 if abs(diff) < abs(best_diff):
                     best_diff = int(diff)
-                    # Determine type
                     if not state_before and state_after:
                         transition_type = 'up'
                     else:
                         transition_type = 'down'
 
-        # Filter out if too far (e.g. > 90 min away)
         if abs(best_diff) > 90:
             return ""
 
-        # Logic check: Did the event match the schedule change?
-        # e.g. Light went DOWN, and nearest schedule change was DOWN -> Good
         expected_type = 'up' if is_up else 'down'
-        
         if transition_type != expected_type:
-            return "" # Probably random failure, not schedule related
+            return "" 
 
-        # Format output
         sign = "+" if best_diff > 0 else "−"
-        # + means Event was LATER than Schedule (Delay)
-        # - means Event was EARLIER than Schedule (Early)
-        
         action = "увімкнення" if is_up else "вимкнення"
-        
-        if best_diff > 0:
-            label = f"запізнення {action}"
-        else:
-            label = f"раніше {action}"
+        label = f"запізнення {action}" if best_diff > 0 else f"раніше {action}"
             
         return f"• Точність: {sign}{abs(best_diff)} хв ({label})"
 
@@ -300,6 +270,54 @@ def get_deviation_info(event_time, is_up):
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
+        
+        # 1. Status Page (Root)
+        if parsed.path == "/":
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.end_headers()
+            
+            with state_lock:
+                status_color = "#4CAF50" if state["status"] == "up" else "#EF9A9A"
+                status_text = "СВІТЛО Є" if state["status"] == "up" else "СВІТЛА НЕМАЄ"
+                last_event_ts = state["came_up_at"] if state["status"] == "up" else state["went_down_at"]
+                
+                duration = "?"
+                if last_event_ts > 0:
+                    duration = format_duration(time.time() - last_event_ts)
+                
+                last_ping = "ніколи"
+                if state["last_seen"] > 0:
+                    last_ping = datetime.datetime.fromtimestamp(state["last_seen"], KYIV_TZ).strftime("%H:%M:%S")
+
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Power Monitor Status</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 50px; }}
+                    .status {{ font-size: 48px; font-weight: bold; color: {status_color}; margin: 20px; }}
+                    .info {{ font-size: 20px; color: #CCC; }}
+                    .footer {{ margin-top: 50px; font-size: 14px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <h1>Монітор живлення</h1>
+                <div class="status">{status_text}</div>
+                <div class="info">
+                    Тривалість стану: <b>{duration}</b><br>
+                    Останній сигнал (heartbeat): <b>{last_ping}</b>
+                </div>
+                <div class="footer">HTZNR Server | Light Monitor Kyiv v1.8</div>
+            </body>
+            </html>
+            """
+            self.wfile.write(html.encode('utf-8'))
+            return
+
+        # 2. Push API
         if parsed.path == f"/api/push/{state['secret_key']}":
             self.send_response(200)
             self.send_header("Content-type", "application/json")
@@ -326,7 +344,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     sched_light_now, current_end, next_range = get_schedule_context()
                     
-                    time_str = datetime.datetime.fromtimestamp(current_time, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
+                    time_str = datetime.datetime.fromtimestamp(current_time, KYIV_TZ).strftime("%H:%M")
                     dev_msg = get_deviation_info(current_time, True)
                     
                     # Header
@@ -343,7 +361,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     if sched_light_now is False: # Should be dark
                         msg += f"• За графіком світло мало з'явитися о: <b>{current_end}</b>\n"
                         # Extract the END time of the next light slot (when the next outage starts)
-                        next_off_time = next_range.split(' - ')[1] if ' - ' in next_range else "24:00"
+                        next_off_time = next_range.split(' - ')[1] if ' - ' in next_range else "час очікується"
                         msg += f"• Наступне вимкнення: <b>{next_off_time}</b>"
                     else:
                         msg += f"• Зараз за графіком — <b>час зі світлом</b>\n"
@@ -390,7 +408,7 @@ def monitor_loop():
                 
                 sched_light_now, current_end, next_range = get_schedule_context()
                 
-                time_str = datetime.datetime.fromtimestamp(down_time_ts, datetime.timezone(datetime.timedelta(hours=TZ_OFFSET))).strftime("%H:%M")
+                time_str = datetime.datetime.fromtimestamp(down_time_ts, KYIV_TZ).strftime("%H:%M")
                 dev_msg = get_deviation_info(down_time_ts, False)
                 
                 # Header
@@ -407,7 +425,7 @@ def monitor_loop():
                 if sched_light_now is True: # Should be light
                     # next_range describes the upcoming DARK slot (e.g. 13:00 - 20:00)
                     # We want to know when light returns, which is the END of that slot (20:00)
-                    expected_return = next_range.split(' - ')[1] if ' - ' in next_range else "невідомо"
+                    expected_return = next_range.split(' - ')[1] if ' - ' in next_range else "час очікується"
                     msg += f"• Очікуємо за графіком о: <b>{expected_return}</b>\n"
                     msg += f"• Аналіз: <b>За графіком світло мало бути до {current_end}</b>"
                 else:

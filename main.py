@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 # === Configuration ===
@@ -12,7 +13,7 @@ CACHE_FILE = "last_schedules.json"
 HISTORY_FILE = "schedule_history.json"
 MESSAGES_FILE = "message_ids.json"
 
-KYIV_TZ = timezone(timedelta(hours=2))
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 GITHUB_URL = "https://raw.githubusercontent.com/Baskerville42/outage-data-ua/main/data/{region}.json"
 YASNO_URL = "https://app.yasno.ua/api/blackout-service/public/shutdowns/regions/{region_id}/dsos/{dso_id}/planned-outages"
@@ -645,31 +646,42 @@ def main():
         else:
             history = {}
             
-        today_str = get_kyiv_now().strftime("%Y-%m-%d")
-        
+        # We want to save schedules for ALL dates we just received (Today and Tomorrow)
         # Prioritize Yasno, then GitHub
-        # Assuming single group GPV36.1 for now, or take the first available
-        slots_to_save = None
         
-        # Try Yasno
+        # Collect unique dates from both sources
+        all_fetched_dates = set()
         if "yasno" in new_c:
-            for grp, days in new_c["yasno"].items():
-                if today_str in days and days[today_str].get("slots"):
-                    slots_to_save = days[today_str]["slots"]
-                    break
-        
-        # Try GitHub if no Yasno
-        if not slots_to_save and "github" in new_c:
-            for grp, days in new_c["github"].items():
-                if today_str in days and days[today_str].get("slots"):
-                    slots_to_save = days[today_str]["slots"]
-                    break
-                    
-        if slots_to_save:
-            history[today_str] = slots_to_save
+            for grp in new_c["yasno"]: all_fetched_dates.update(new_c["yasno"][grp].keys())
+        if "github" in new_c:
+            for grp in new_c["github"]: all_fetched_dates.update(new_c["github"][grp].keys())
+
+        updated_dates = []
+        for d_str in all_fetched_dates:
+            slots_to_save = None
+            
+            # Try Yasno for this specific date
+            if "yasno" in new_c:
+                for grp, days in new_c["yasno"].items():
+                    if d_str in days and days[d_str].get("slots"):
+                        slots_to_save = days[d_str]["slots"]
+                        break
+            
+            # Try GitHub if no Yasno for this specific date
+            if not slots_to_save and "github" in new_c:
+                for grp, days in new_c["github"].items():
+                    if d_str in days and days[d_str].get("slots"):
+                        slots_to_save = days[d_str]["slots"]
+                        break
+            
+            if slots_to_save:
+                history[d_str] = slots_to_save
+                updated_dates.append(d_str)
+
+        if updated_dates:
             with open(HISTORY_FILE, "w") as f:
                 json.dump(history, f, indent=2)
-            print(f"History updated for {today_str}")
+            print(f"History updated for: {', '.join(updated_dates)}")
             
     except Exception as e:
         print(f"Error saving history: {e}")
