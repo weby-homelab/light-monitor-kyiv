@@ -21,9 +21,9 @@ def get_schedule_slots(date_obj):
         with open(HISTORY_FILE, "r") as f:
             history = json.load(f)
         date_str = date_obj.strftime("%Y-%m-%d")
-        return history.get(date_str)
+        return history.get(date_str, [True]*48)
     except:
-        return None
+        return [True] * 48
 
 def slots_to_intervals(slots):
     if not slots: return []
@@ -145,36 +145,31 @@ def generate_weekly_chart(end_date, daily_data):
             y_ticks.append(y_pos)
             
             # --- 1. Draw Actual Data (Top Strip) ---
-            for start, end, state in intervals:
-                d_start = datetime.datetime.combine(dummy_date, start.time())
-                d_end = datetime.datetime.combine(dummy_date, end.time())
-                
-                if end.time() == datetime.time.min and end != start:
-                     d_end += datetime.timedelta(days=1)
-                elif d_end < d_start:
-                     d_end += datetime.timedelta(days=1)
-                    
-                start_num = mdates.date2num(d_start)
-                end_num = mdates.date2num(d_end)
-                duration_num = end_num - start_num
-                
-                color = color_map.get(state, '#C8E6C9')
-                ax.broken_barh([(start_num, duration_num)], (y_pos, 0.45), facecolors=color, edgecolor='none')
-
-            # --- 1.1 Future Bar (for Today) ---
             now_kyiv = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-            if day_date == now_kyiv.date():
-                f_start = datetime.datetime.combine(dummy_date, now_kyiv.time())
-                f_end = datetime.datetime.combine(dummy_date, datetime.time(23, 59))
-                
-                if f_end > f_start:
-                    start_n = mdates.date2num(f_start)
-                    end_n = mdates.date2num(f_end)
-                    duration_n = end_n - start_n
+            
+            # Only draw actual data if the day is not in the future
+            if day_date <= now_kyiv.date():
+                for start, end, state in intervals:
+                    # Clip future intervals for Today
+                    if day_date == now_kyiv.date():
+                        if start > now_kyiv: continue 
+                        if end > now_kyiv: end = now_kyiv
                     
-                    # Dark purple-grey hatched bar
-                    ax.broken_barh([(start_n, duration_n)], (y_pos, 0.45), 
-                                   facecolors='#3D2E4A', edgecolor='#5D4E6A', hatch='///', linewidth=0.5)
+                    d_start = datetime.datetime.combine(dummy_date, start.time())
+                    d_end = datetime.datetime.combine(dummy_date, end.time())
+                    
+                    if end.time() == datetime.time.min and end != start:
+                         d_end += datetime.timedelta(days=1)
+                    elif d_end < d_start:
+                         d_end += datetime.timedelta(days=1)
+                        
+                    start_num = mdates.date2num(d_start)
+                    end_num = mdates.date2num(d_end)
+                    duration_num = end_num - start_num
+                    
+                    if duration_num > 0:
+                        color = color_map.get(state, '#C8E6C9')
+                        ax.broken_barh([(start_num, duration_num)], (y_pos, 0.45), facecolors=color, edgecolor='none')
 
             # --- Separator Line (Background Color) ---
             ax.axhline(y=y_pos, color='#1E122A', linewidth=0.5, zorder=5)
