@@ -374,7 +374,10 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     <img src="/chart.png" class="chart" alt="Графік за сьогодні">
                     <div class="group">{group_name}</div>
                     {analytics_html}
-                    <div class="footer">HTZNR Server | Оновлено: {page_updated}</div>
+                    <div class="footer">
+                        HTZNR Server | Оновлено: {page_updated}<br>
+                        <a href="https://github.com/weby-homelab/light-monitor-kyiv" style="color: #666; text-decoration: none;">GitHub: light-monitor-kyiv</a>
+                    </div>
                 </div>
             </body>
             </html>
