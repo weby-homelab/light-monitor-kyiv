@@ -539,7 +539,7 @@ if __name__ == "__main__":
     
     # Start HTTP Server
     socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("", PORT), RequestHandler)
+    server = socketserver.ThreadingTCPServer(("", PORT), RequestHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
