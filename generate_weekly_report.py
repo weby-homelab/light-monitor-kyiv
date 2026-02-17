@@ -247,9 +247,16 @@ def send_telegram_photo(photo_path, caption):
             print(f"Error sending weekly report: {e}")
 
 if __name__ == "__main__":
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=TZ_OFFSET)))
-    if len(sys.argv) > 1:
-        target_date = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Target date YYYY-MM-DD")
+    parser.add_argument("--output", help="Save chart to file instead of sending")
+    args = parser.parse_args()
+
+    now = datetime.datetime.now(KYIV_TZ)
+    if args.date:
+        target_date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
     else:
         target_date = now.date()
 
@@ -260,6 +267,19 @@ if __name__ == "__main__":
     
     events = load_events()
     stats = get_weekly_stats(monday, sunday, events)
+    
+    # If output is specified, use that filename
+    if args.output:
+        # We need to hack generate_weekly_chart or just rename the result
+        temp_filename = generate_weekly_chart(sunday, stats['daily_data'])
+        if os.path.exists(temp_filename):
+            if os.path.exists(args.output):
+                os.remove(args.output)
+            os.rename(temp_filename, args.output)
+            print(f"Chart saved to {args.output}")
+        sys.exit(0)
+
+    # Standard Telegram Flow
     filename = generate_weekly_chart(sunday, stats['daily_data'])
     
     up_h = stats['total_up'] / 3600

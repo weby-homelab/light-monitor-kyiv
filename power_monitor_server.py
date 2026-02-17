@@ -47,8 +47,29 @@ def trigger_daily_report_update():
             
             # Run without --no-send so it updates Telegram
             subprocess.run([python_exec, script_path], check=True)
+            
+            # Also trigger weekly report update
+            trigger_weekly_report_update()
+            
         except Exception as e:
             print(f"Failed to trigger daily report: {e}")
+
+    threading.Thread(target=run_script).start()
+
+def trigger_weekly_report_update():
+    """
+    Triggers the generation of the weekly report chart for the web.
+    """
+    def run_script():
+        try:
+            print("Triggering weekly report update...")
+            python_exec = "/root/geminicli/light-monitor-kyiv/venv/bin/python"
+            script_path = "/root/geminicli/light-monitor-kyiv/generate_weekly_report.py"
+            output_path = "/root/geminicli/light-monitor-kyiv/web/weekly.png"
+            
+            subprocess.run([python_exec, script_path, "--output", output_path], check=True)
+        except Exception as e:
+            print(f"Failed to trigger weekly report: {e}")
 
     threading.Thread(target=run_script).start()
 
@@ -324,9 +345,79 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             except:
                 pass
 
-            # Get Analytics
+            # Get Analytics & History
             analytics_html = ""
+            history_html = ""
+            weekly_chart_html = ""
+            
             page_updated = datetime.datetime.now(KYIV_TZ).strftime("%d.%m.%Y %H:%M:%S")
+            
+            # --- Weekly Chart ---
+            weekly_chart_path = "web/weekly.png"
+            if os.path.exists(weekly_chart_path):
+                 weekly_chart_html = '<img src="/weekly.png" class="chart" alt="Тижневий графік" style="margin-top: 20px;">'
+            
+            # --- Event History ---
+            try:
+                if os.path.exists(EVENT_LOG_FILE):
+                    with open(EVENT_LOG_FILE, 'r') as f:
+                        logs = json.load(f)
+                        
+                        # Calculate durations
+                        for i in range(len(logs)):
+                            if i > 0:
+                                diff = logs[i]['timestamp'] - logs[i-1]['timestamp']
+                                logs[i]['duration_prev'] = diff
+                            else:
+                                logs[i]['duration_prev'] = None
+
+                        # Last 10 events, reversed
+                        last_logs = logs[-10:][::-1]
+                        
+                        rows = ""
+                        for log in last_logs:
+                            ts = log.get('timestamp', 0)
+                            evt = log.get('event', 'unknown')
+                            dur_sec = log.get('duration_prev')
+                            
+                            dt_str = datetime.datetime.fromtimestamp(ts, KYIV_TZ).strftime("%d.%m %H:%M")
+                            
+                            color = "#4CAF50" if evt == "up" else "#EF9A9A"
+                            icon = "🟢" if evt == "up" else "🔴"
+                            
+                            if evt == "up":
+                                base_text = "Світло з'явилося"
+                                if dur_sec:
+                                    dur_str = format_duration(dur_sec)
+                                    text = f"{base_text} <span style='font-weight:normal; font-size: 0.9em; color: #AAA;'>(не було {dur_str})</span>"
+                                else:
+                                    text = base_text
+                            else:
+                                base_text = "Світло зникло"
+                                if dur_sec:
+                                    dur_str = format_duration(dur_sec)
+                                    text = f"{base_text} <span style='font-weight:normal; font-size: 0.9em; color: #AAA;'>(було {dur_str})</span>"
+                                else:
+                                    text = base_text
+                            
+                            rows += f"""
+                            <tr style="border-bottom: 1px solid #333;">
+                                <td style="padding: 8px; color: #DDD; white-space: nowrap;">{dt_str}</td>
+                                <td style="padding: 8px; color: {color}; font-weight: bold;">{icon} {text}</td>
+                            </tr>
+                            """
+                        
+                        history_html = f"""
+                        <div class="history" style="margin-top: 30px; text-align: left; display: inline-block; width: 100%; max-width: 600px;">
+                            <h3 style="color: #BBB; border-bottom: 1px solid #444; padding-bottom: 10px;">🕒 Останні події</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                {rows}
+                            </table>
+                        </div>
+                        """
+            except Exception as e:
+                print(f"Error reading history: {e}")
+
             try:
                 stats_file = "web/stats.json"
                 if os.path.exists(stats_file):
@@ -337,7 +428,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         
                         analytics_html = f"""
                         <div class="analytics" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: left; display: inline-block;">
-                            <h3 style="margin-top: 0; color: #BBB;">📉 План vs Факт</h3>
+                            <h3 style="margin-top: 0; color: #BBB;">📉 План vs Факт (Сьогодні)</h3>
                             <div>• За планом: <b>{s['plan_up']}</b></div>
                             <div>• Реально: <b>{s['fact_up']}</b></div>
                             <div>• Відхилення: <b>{diff_str}</b> ({s['pct']}% від плану)</div>
@@ -352,6 +443,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             <head>
                 <title>Power Monitor Status</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta name="robots" content="index, follow">
                 <meta http-equiv="refresh" content="60">
                 <style>
                     body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 20px; }}
@@ -371,11 +463,18 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         Тривалість стану: <b>{duration}</b><br>
                         Останній сигнал: <b>{last_ping}</b>
                     </div>
+                    
+                    <h3 style="color: #BBB;">Сьогодні</h3>
                     <img src="/chart.png" class="chart" alt="Графік за сьогодні">
                     <div class="group">{group_name}</div>
                     {analytics_html}
+                    
+                    {weekly_chart_html}
+                    
+                    {history_html}
+                    
                     <div class="footer">
-                        HTZNR Server | Оновлено: {page_updated}<br>
+                        Оновлено: {page_updated}<br>
                         <a href="https://github.com/weby-homelab/light-monitor-kyiv" style="color: #666; text-decoration: none;">GitHub: light-monitor-kyiv</a>
                     </div>
                 </div>
@@ -385,7 +484,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(html.encode('utf-8'))
             return
 
-        # 1.5 Chart Image
+        # 1.5 Chart Image (Daily)
         if parsed.path == "/chart.png":
             chart_path = "web/chart.png"
             if os.path.exists(chart_path):
@@ -397,6 +496,28 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
+            return
+
+        # 1.6 Chart Image (Weekly)
+        if parsed.path == "/weekly.png":
+            chart_path = "web/weekly.png"
+            if os.path.exists(chart_path):
+                self.send_response(200)
+                self.send_header("Content-type", "image/png")
+                self.end_headers()
+                with open(chart_path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
+            return
+
+        # 1.6 Robots.txt
+        if parsed.path == "/robots.txt":
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"User-agent: *\nAllow: /")
             return
 
         # 2. Push API
