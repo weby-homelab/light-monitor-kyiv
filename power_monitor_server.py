@@ -428,7 +428,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         
                         analytics_html = f"""
                         <div class="analytics" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: left; display: inline-block;">
-                            <h3 style="margin-top: 0; color: #BBB;">📉 План vs Факт (Сьогодні)</h3>
+                            <h3 style="margin-top: 0; color: #BBB;">🔆 План vs Факт (Сьогодні)</h3>
                             <div>• За планом: <b>{s['plan_up']}</b></div>
                             <div>• Реально: <b>{s['fact_up']}</b></div>
                             <div>• Відхилення: <b>{diff_str}</b> ({s['pct']}% від плану)</div>
@@ -490,6 +490,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             if os.path.exists(chart_path):
                 self.send_response(200)
                 self.send_header("Content-type", "image/png")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
                 self.end_headers()
                 with open(chart_path, "rb") as f:
                     self.wfile.write(f.read())
@@ -504,6 +507,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             if os.path.exists(chart_path):
                 self.send_response(200)
                 self.send_header("Content-type", "image/png")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
                 self.end_headers()
                 with open(chart_path, "rb") as f:
                     self.wfile.write(f.read())
