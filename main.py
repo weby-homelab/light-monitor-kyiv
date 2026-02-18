@@ -297,13 +297,17 @@ def render_summary_simple(periods: list[dict], cfg: dict) -> str:
     return "\n".join(lines)
 
 
-def render_summary(periods: list[dict], cfg: dict) -> str:
+def render_summary(periods: list[dict], cfg: dict, stats_periods: list[dict] = None) -> str:
     """Render summary with --- separators"""
     show_detail = cfg['settings'].get('show_intervals_detail', False)
     
+    # Use stats_periods for calculation if available, otherwise periods
+    calc_periods = stats_periods if stats_periods is not None else periods
+    
     if show_detail:
-        on_detail = render_intervals_detail(periods, True, cfg)
-        off_detail = render_intervals_detail(periods, False, cfg)
+        # For detailed view, we also use calc_periods to ensure math is correct per day
+        on_detail = render_intervals_detail(calc_periods, True, cfg)
+        off_detail = render_intervals_detail(calc_periods, False, cfg)
         
         parts = []
         if on_detail:
@@ -313,12 +317,12 @@ def render_summary(periods: list[dict], cfg: dict) -> str:
         
         content = "\n\n".join(parts)
     else:
-        content = render_summary_simple(periods, cfg)
+        content = render_summary_simple(calc_periods, cfg)
     
     return f"\n---\n{content}\n---"
 
 
-def render_table(periods: list[dict], cfg: dict) -> str:
+def render_table(periods: list[dict], cfg: dict, stats_periods: list[dict] = None) -> str:
     """Render table wrapped in <pre>"""
     icons = cfg['ui']['icons']
     fmt = cfg['ui']['format']
@@ -349,12 +353,12 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     # Wrap entire table in <pre>
     table_text = "\n".join(lines)
     
-    summary = render_summary(periods, cfg)
+    summary = render_summary(periods, cfg, stats_periods)
     
     return f"<pre>{table_text}</pre>{summary}"
 
 
-def render_list(periods: list[dict], cfg: dict) -> str:
+def render_list(periods: list[dict], cfg: dict, stats_periods: list[dict] = None) -> str:
     """Render list format"""
     icons = cfg['ui']['icons']
     
@@ -368,12 +372,12 @@ def render_list(periods: list[dict], cfg: dict) -> str:
         lines.append(f"{ico} {p['start']} - {p['end']} … ({format_hours_full(p['hours'])})")
     
     content = "\n".join(lines)
-    summary = render_summary(periods, cfg)
+    summary = render_summary(periods, cfg, stats_periods)
     
     return f"{content}{summary}"
 
 
-def render_day_body(periods: list[dict], status: str, cfg: dict) -> str:
+def render_day_body(periods: list[dict], status: str, cfg: dict, stats_periods: list[dict] = None) -> str:
     """Render the body of a day message (status or intervals)"""
     ui = cfg['ui']
     icons = ui['icons']
@@ -385,9 +389,9 @@ def render_day_body(periods: list[dict], status: str, cfg: dict) -> str:
         return f"{icons['pending']} {txt['pending']}"
     elif periods:
         if cfg['settings']['style'] == "table":
-            return render_table(periods, cfg)
+            return render_table(periods, cfg, stats_periods)
         else:
-            return render_list(periods, cfg)
+            return render_list(periods, cfg, stats_periods)
     return ""
 
 
@@ -452,7 +456,8 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                 day_data_map[d_str]['date'] = g_d['date']
                 day_data_map[d_str]['sources']['github'] = {
                     'status': g_d['status'],
-                    'periods': slots_to_periods(g_d['slots']) if g_d['slots'] else []
+                    'periods': slots_to_periods(g_d['slots']) if g_d['slots'] else [],
+                    'stats_periods': slots_to_periods(g_d['slots']) if g_d['slots'] else []
                 }
                 
             # Check Yasno
@@ -461,7 +466,8 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                 day_data_map[d_str]['date'] = y_d['date'] or day_data_map[d_str]['date']
                 day_data_map[d_str]['sources']['yasno'] = {
                     'status': y_d['status'],
-                    'periods': slots_to_periods(y_d['slots']) if y_d['slots'] else []
+                    'periods': slots_to_periods(y_d['slots']) if y_d['slots'] else [],
+                    'stats_periods': slots_to_periods(y_d['slots']) if y_d['slots'] else []
                 }
 
         # --- Filter "Tomorrow" if empty/pending ---
@@ -521,6 +527,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
             if gh_s and ya_s:
                 if gh_s['status'] == 'normal' and ya_s['status'] == 'normal':
                     # Compare periods (they might be modified, so compare structure)
+                    # We compare 'periods' (the merged ones) to decide if we can combine source headers
                     if gh_s['periods'] == ya_s['periods']:
                         match = True
             
@@ -530,16 +537,17 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                 
                 head = format_day_header(dt, "github", cfg)
                 head = head.replace(f"[{gh_name}]", f"[{gh_name}, {ya_name}]")
-                body = render_day_body(gh_s['periods'], gh_s['status'], cfg)
+                # Use stats_periods for correct totals
+                body = render_day_body(gh_s['periods'], gh_s['status'], cfg, stats_periods=gh_s['stats_periods'])
                 src_msgs.append(f"{head}\n\n{body}")
             else:
                 if gh_s:
                     head = format_day_header(dt, "github", cfg)
-                    body = render_day_body(gh_s['periods'], gh_s['status'], cfg)
+                    body = render_day_body(gh_s['periods'], gh_s['status'], cfg, stats_periods=gh_s['stats_periods'])
                     src_msgs.append(f"{head}\n\n{body}")
                 if ya_s:
                     head = format_day_header(dt, "yasno", cfg)
-                    body = render_day_body(ya_s['periods'], ya_s['status'], cfg)
+                    body = render_day_body(ya_s['periods'], ya_s['status'], cfg, stats_periods=ya_s['stats_periods'])
                     src_msgs.append(f"{head}\n\n{body}")
             
             if src_msgs:
