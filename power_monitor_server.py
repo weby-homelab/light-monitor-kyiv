@@ -146,7 +146,7 @@ def get_schedule_context():
             data = json.load(f)
         
         source = data.get('yasno') or data.get('github')
-        if not source: return (None, None, "Невідомо")
+        if not source: return (None, None, "Невідомо", None)
         
         group_key = list(source.keys())[0]
         schedule_data = source[group_key]
@@ -156,7 +156,7 @@ def get_schedule_context():
         tomorrow_str = (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         
         if today_str not in schedule_data or not schedule_data[today_str].get('slots'):
-            return (None, None, "Графік відсутній")
+            return (None, None, "Графік відсутній", None)
             
         # Combine today and tomorrow slots for a 48h view (96 slots)
         slots = list(schedule_data[today_str]['slots'])
@@ -197,6 +197,8 @@ def get_schedule_context():
         
         # Find next block range
         next_start_idx = end_idx
+        next_duration = None
+        
         if next_start_idx < len(slots):
             # If we need to show the range of the NEXT block
             # But the next block is in tomorrow and tomorrow is empty/padded
@@ -212,14 +214,18 @@ def get_schedule_context():
                 ns_t = format_idx_to_time(next_start_idx)
                 ne_t = format_idx_to_time(next_end_idx)
                 next_range = f"{ns_t} - {ne_t}"
+                
+                # Calculate duration
+                dur_h = (next_end_idx - next_start_idx) * 0.5
+                next_duration = f"{dur_h:g}".replace('.', ',')
         else:
             next_range = "час очікується"
             
-        return (is_light_now, t_end, next_range)
+        return (is_light_now, t_end, next_range, next_duration)
             
     except Exception as e:
         print(f"Schedule error: {e}")
-        return (None, None, "Помилка")
+        return (None, None, "Помилка", None)
 
 def send_telegram(message):
     # Mask token for logging
@@ -297,6 +303,9 @@ def get_deviation_info(event_time, is_up):
         expected_type = 'up' if is_up else 'down'
         if transition_type != expected_type:
             return "" 
+
+        if best_diff == 0:
+            return "• Точність: 0 хв (точно за графіком)"
 
         sign = "+" if best_diff > 0 else "−"
         action = "увімкнення" if is_up else "вимкнення"
@@ -551,7 +560,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     else:
                         duration = "невідомо"
                     
-                    sched_light_now, current_end, next_range = get_schedule_context()
+                    sched_light_now, current_end, next_range, next_duration = get_schedule_context()
                     
                     time_str = datetime.datetime.fromtimestamp(current_time, KYIV_TZ).strftime("%H:%M")
                     dev_msg = get_deviation_info(current_time, True)
@@ -574,7 +583,10 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         msg += f"• Наступне вимкнення: <b>{next_off_time}</b>"
                     else:
                         msg += f"• Зараз за графіком — <b>час зі світлом</b>\n"
-                        msg += f"• Наступне вимкнення: <b>{current_end}</b>"
+                        if next_duration:
+                            msg += f"• Наступне вимкнення: <b>{next_range} ({next_duration} год)</b>"
+                        else:
+                            msg += f"• Наступне вимкнення: <b>{current_end}</b>"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
                     trigger_daily_report_update()
@@ -616,7 +628,7 @@ def monitor_loop():
                 else:
                     duration = "невідомо"
                 
-                sched_light_now, current_end, next_range = get_schedule_context()
+                sched_light_now, current_end, next_range, next_duration = get_schedule_context()
                 
                 time_str = datetime.datetime.fromtimestamp(down_time_ts, KYIV_TZ).strftime("%H:%M")
                 dev_msg = get_deviation_info(down_time_ts, False)
