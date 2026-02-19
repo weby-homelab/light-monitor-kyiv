@@ -47,12 +47,12 @@
 
 ```mermaid
 graph LR
-    H[Heartbeat Check] --> S[Server (Python)]
-    S --> T[Telegram Bot]
-    S --> W[Web Dashboard (PWA)]
-    C[Cron Scheduler] --> A[Analytics Engine]
-    A --> G[Graph Generator]
-    A --> Y[Yasno API]
+    H["Heartbeat Check"] --> S["Server (Python)"]
+    S --> T["Telegram Bot"]
+    S --> W["Web Dashboard (PWA)"]
+    C["Cron Scheduler"] --> A["Analytics Engine"]
+    A --> G["Graph Generator"]
+    A --> Y["Yasno API"]
 ```
 
 *   **Core:** Python 3.10+ (Async IO, Requests)
