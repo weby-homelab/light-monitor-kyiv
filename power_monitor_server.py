@@ -454,6 +454,14 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <meta name="robots" content="index, follow">
                 <meta http-equiv="refresh" content="60">
+                
+                <!-- PWA Settings -->
+                <link rel="manifest" href="/manifest.json">
+                <meta name="theme-color" content="#1E122A">
+                <link rel="icon" type="image/svg+xml" href="/icon.svg">
+                <link rel="apple-touch-icon" href="/icon.svg">
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
                 <style>
                     body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 20px; }}
                     .container {{ max-width: 800px; margin: 0 auto; }}
@@ -487,6 +495,15 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         <a href="https://github.com/weby-homelab/light-monitor-kyiv" style="color: #666; text-decoration: none;">GitHub: light-monitor-kyiv</a>
                     </div>
                 </div>
+                <script>
+                    if ('serviceWorker' in navigator) {{
+                        window.addEventListener('load', () => {{
+                            navigator.serviceWorker.register('/service-worker.js')
+                                .then(reg => console.log('SW registered!', reg))
+                                .catch(err => console.log('SW failed!', err));
+                        }});
+                    }}
+                </script>
             </body>
             </html>
             """
@@ -521,6 +538,26 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header("Expires", "0")
                 self.end_headers()
                 with open(chart_path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
+            return
+
+        # --- PWA Static Files ---
+        if parsed.path in ["/manifest.json", "/icon.svg", "/service-worker.js"]:
+            file_map = {
+                "/manifest.json": ("application/json", "web/manifest.json"),
+                "/icon.svg": ("image/svg+xml", "web/icon.svg"),
+                "/service-worker.js": ("text/javascript", "web/service-worker.js")
+            }
+            content_type, file_path = file_map[parsed.path]
+            
+            if os.path.exists(file_path):
+                self.send_response(200)
+                self.send_header("Content-type", content_type)
+                self.end_headers()
+                with open(file_path, "rb") as f:
                     self.wfile.write(f.read())
             else:
                 self.send_response(404)
