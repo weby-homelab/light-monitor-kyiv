@@ -41,24 +41,74 @@
 
 ---
 
-## 🛠 Технологічний стек
+## 🛠 Технологічний стек та Архітектура
 
-Система побудована за модульним принципом для максимальної гнучкості.
+Система спроектована як набір незалежних мікросервісів, що спілкуються через файлову базу даних (JSON). Це забезпечує високу відмовостійкість: якщо один модуль впаде, інші продовжать працювати.
 
 ```mermaid
-graph LR
-    H["Heartbeat Check"] --> S["Server (Python)"]
-    S --> T["Telegram Bot"]
-    S --> W["Web Dashboard (PWA)"]
-    C["Cron Scheduler"] --> A["Analytics Engine"]
-    A --> G["Graph Generator"]
-    A --> Y["Yasno API"]
+graph TD
+    subgraph External["🌍 Зовнішній Світ"]
+        Router(("📡 Router / Script"))
+        Yasno[("☁️ Yasno / DTEK API")]
+        User(("👤 Користувач"))
+    end
+
+    subgraph Backend["🧠 Core (Python)"]
+        Monitor["🚀 power_monitor_server.py<br>(HTTP Listener & API)"]
+        Scraper["🕷️ main.py<br>(Scraper & Analyzer)"]
+        Generator["🎨 generate_reports.py<br>(Matplotlib Viz Engine)"]
+    end
+
+    subgraph Database["💾 JSON Storage (NoSQL)"]
+        EventLog[("event_log.json<br>(Історія увімкнень)")]
+        SchedLog[("schedule_history.json<br>(Архів графіків)")]
+        State[("power_monitor_state.json<br>(Поточний стан)")]
+    end
+
+    subgraph Frontend["🖥️ Interface"]
+        TG["✈️ Telegram Bot"]
+        PWA["📱 PWA Dashboard<br>(HTML/JS/CSS)"]
+    end
+
+    %% Data Flow
+    Router -- "Heartbeat (GET)" --> Monitor
+    Yasno -- "JSON Data" --> Scraper
+    
+    %% Logic
+    Monitor -- "Write" --> EventLog & State
+    Scraper -- "Write" --> SchedLog
+    Monitor -.-> |"Trigger"| Generator
+    
+    %% Visualization
+    Generator -- "Read" --> EventLog & SchedLog
+    Generator -- "Render PNG" --> PWA
+    Generator -- "Send" --> TG
+    
+    %% User Interaction
+    Monitor -- "Push Alert" --> TG
+    User -- "HTTPS" --> PWA
+    PWA -- "AJAX Poll" --> Monitor
 ```
 
-*   **Core:** Python 3.10+ (Async IO, Requests)
-*   **Web:** Vanilla JS + PWA (Service Workers)
-*   **Data:** JSON-based database (NoSQL approach)
-*   **Viz:** Matplotlib (Custom Dark Theme)
+### 🧱 Компоненти системи
+
+*   **🐍 Core (Backend):** Python 3.10+
+    *   **Async IO:** Багатопотокова обробка запитів (`threading`) для миттєвої реакції на Heartbeat.
+    *   **Http.server:** Легковажний веб-сервер без важких фреймворків (Django/Flask) для максимальної швидкодії на слабкому залізі.
+    *   **Subprocess:** Асинхронний запуск генераторів звітів, щоб не блокувати основний потік моніторингу.
+
+*   **🌐 Frontend (Web & PWA):**
+    *   **Vanilla JS:** Чистий JavaScript без `npm` залежностей та збірки.
+    *   **PWA:** Реалізовано через `Service Workers` для офлайн-доступу та `manifest.json` для встановлення як нативний додаток.
+    *   **AJAX Polling:** Живе оновлення статусу без перезавантаження сторінки.
+
+*   **💾 Data (Persistence):**
+    *   **JSON-based DB:** Використання плоских файлів замість SQL. Це дозволяє легко бекапити дані, редагувати їх вручну та не потребує налаштування сервера баз даних.
+    *   **State Management:** Атомарний запис станів для запобігання колізіям.
+
+*   **🎨 Visualization:**
+    *   **Matplotlib:** Генерація растрових зображень (PNG) з кастомним `style context` для реалізації темної теми (`Deep Purple`).
+    *   **Pandas-free:** Обробка часових рядів на чистому Python для економії пам'яті.
 
 ---
 
