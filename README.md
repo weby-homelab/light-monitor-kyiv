@@ -1,4 +1,4 @@
-# ⚡️ Light Monitor Kyiv
+# ⚡️ Монітор електропостачання (Київ)
 **Розумний енергетичний асистент для вашого дому**
 
 [![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)]()
