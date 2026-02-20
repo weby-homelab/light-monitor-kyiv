@@ -317,6 +317,61 @@ def get_deviation_info(event_time, is_up):
         print(f"Error in deviation calc: {e}")
         return ""
 
+def get_nearest_schedule_switch(event_time, target_is_up):
+    """
+    Finds the nearest scheduled switch time for the given event.
+    target_is_up: True if we are looking for ON switch, False for OFF.
+    Returns: Formatted time string "HH:MM" or None.
+    """
+    try:
+        if not os.path.exists(SCHEDULE_FILE): return None
+        with open(SCHEDULE_FILE, 'r') as f: data = json.load(f)
+        
+        source = data.get('yasno') or data.get('github')
+        if not source: return None
+        
+        group_key = list(source.keys())[0]
+        schedule_data = source[group_key]
+        
+        dt = datetime.datetime.fromtimestamp(event_time, KYIV_TZ)
+        date_str = dt.strftime("%Y-%m-%d")
+        
+        if date_str not in schedule_data or not schedule_data[date_str].get('slots'):
+            return None
+            
+        slots = schedule_data[date_str]['slots']
+        
+        best_diff = 9999
+        best_time_str = None
+        
+        for i in range(49):
+            state_before = slots[i-1] if i > 0 else slots[0]
+            state_after = slots[i] if i < 48 else slots[47]
+            if i == 0: state_before = not state_after
+            
+            if state_before != state_after:
+                # Check if this transition matches our target
+                # OFF->ON (Up) is state_after=True
+                # ON->OFF (Down) is state_after=False
+                is_up_switch = state_after
+                
+                if is_up_switch == target_is_up:
+                    trans_h = i // 2
+                    trans_m = 30 if i % 2 else 0
+                    trans_dt = dt.replace(hour=trans_h, minute=trans_m, second=0, microsecond=0)
+                    
+                    diff = abs((dt - trans_dt).total_seconds())
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_time_str = f"{trans_h:02d}:{trans_m:02d}"
+                        
+        if best_diff > 5400: # If closest is more than 1.5 hours away, ignore
+            return None
+            
+        return best_time_str
+    except:
+        return None
+
 # --- Heartbeat Handler ---
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -364,7 +419,12 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             # --- Weekly Chart ---
             weekly_chart_path = "web/weekly.png"
             if os.path.exists(weekly_chart_path):
-                 weekly_chart_html = '<img src="/weekly.png" class="chart" alt="Тижневий графік" style="margin-top: 20px;">'
+                 weekly_chart_html = """
+                 <div class="card">
+                     <div class="title">Тижневий графік</div>
+                     <img src="/weekly.png" class="chart" alt="Тижневий графік">
+                 </div>
+                 """
             
             # --- Event History ---
             try:
@@ -398,28 +458,28 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                                 base_text = "Світло з'явилося"
                                 if dur_sec:
                                     dur_str = format_duration(dur_sec)
-                                    text = f"{base_text} <span style='font-weight:normal; font-size: 0.9em; color: #AAA;'>(не було {dur_str})</span>"
+                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA;\'>(не було {dur_str})</span>"
                                 else:
                                     text = base_text
                             else:
                                 base_text = "Світло зникло"
                                 if dur_sec:
                                     dur_str = format_duration(dur_sec)
-                                    text = f"{base_text} <span style='font-weight:normal; font-size: 0.9em; color: #AAA;'>(було {dur_str})</span>"
+                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA;\'>(було {dur_str})</span>"
                                 else:
                                     text = base_text
                             
                             rows += f"""
-                            <tr style="border-bottom: 1px solid #333;">
-                                <td style="padding: 8px; color: #DDD; white-space: nowrap;">{dt_str}</td>
-                                <td style="padding: 8px; color: {color}; font-weight: bold;">{icon} {text}</td>
+                            <tr>
+                                <td style="white-space: nowrap;">{dt_str}</td>
+                                <td style="color: {color}; font-weight: bold;">{icon} {text}</td>
                             </tr>
                             """
                         
                         history_html = f"""
-                        <div class="history" style="margin-top: 30px; text-align: left; display: inline-block; width: 100%; max-width: 600px;">
-                            <h3 style="color: #BBB; border-bottom: 1px solid #444; padding-bottom: 10px;">🕒 Останні події</h3>
-                            <table style="width: 100%; border-collapse: collapse;">
+                        <div class="card">
+                            <div class="title">Останні події</div>
+                            <table>
                                 {rows}
                             </table>
                         </div>
@@ -436,11 +496,11 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         diff_str = f"{sign}{s['diff']:.1f}год"
                         
                         analytics_html = f"""
-                        <div class="analytics" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; text-align: left; display: inline-block;">
-                            <h3 style="margin-top: 0; color: #BBB;">🔆 План vs Факт (Сьогодні)</h3>
-                            <div>• За планом: <b>{s['plan_up']}</b></div>
-                            <div>• Реально: <b>{s['fact_up']}</b></div>
-                            <div>• Відхилення: <b>{diff_str}</b> ({s['pct']}% від плану)</div>
+                        <div class="card">
+                            <div class="title">План vs Факт (Сьогодні)</div>
+                            <div style="font-size: 16px; margin-bottom: 5px; color: #CCC;">• За планом: <b style="color: #fff;">{s['plan_up']}</b></div>
+                            <div style="font-size: 16px; margin-bottom: 5px; color: #CCC;">• Реально: <b style="color: #fff;">{s['fact_up']}</b></div>
+                            <div style="font-size: 16px; color: #CCC;">• Відхилення: <b style="color: #fff;">{diff_str}</b> ({s['pct']}% від плану)</div>
                         </div>
                         """
             except Exception as e:
@@ -450,9 +510,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Power Monitor Status</title>
+                <title>Монітор живлення</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <meta name="robots" content="index, follow">
+                <meta name="robots" content="noindex, nofollow">
                 <meta http-equiv="refresh" content="60">
                 
                 <!-- PWA Settings -->
@@ -463,27 +523,65 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
                 <style>
-                    body {{ font-family: sans-serif; background: #1E122A; color: white; text-align: center; padding: 20px; }}
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #1E122A; color: white; text-align: center; padding: 20px; margin: 0; }}
                     .container {{ max-width: 800px; margin: 0 auto; }}
-                    .status {{ font-size: 48px; font-weight: bold; color: {status_color}; margin: 20px; }}
-                    .info {{ font-size: 20px; color: #CCC; margin-bottom: 30px; }}
-                    .chart {{ width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
-                    .group {{ margin-top: 10px; font-size: 18px; color: #BBB; font-weight: bold; }}
-                    .footer {{ margin-top: 50px; font-size: 14px; color: #666; }}
+                    
+                    h1 {{
+                        font-weight: 500;
+                        letter-spacing: 0.5px;
+                        color: #E0E0E0;
+                        margin-bottom: 30px;
+                    }}
+
+                    .card {{ 
+                        background: #1E122A; 
+                        border-radius: 12px; 
+                        padding: 20px; 
+                        margin-bottom: 20px; 
+                        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                        text-align: left;
+                        border: 1px solid #1E122A;
+                    }}
+                    
+                    .title {{ color: #aaa; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 600; }}
+                    .value {{ font-size: 28px; font-weight: bold; }}
+                    .status-text {{ font-size: 16px; margin-top: 5px; color: #ccc; }}
+                    
+                    .status-card .value {{ font-size: 36px; text-align: center; }}
+                    .status-card .status-text {{ text-align: center; }}
+                    
+                    .chart {{ width: 100%; border-radius: 8px; margin-top: 10px; }}
+                    
+                    .group {{ text-align: center; margin-top: -10px; margin-bottom: 20px; font-size: 16px; color: #BBB; font-weight: bold; }}
+
+                    .footer {{ margin-top: 40px; font-size: 12px; color: #666; text-align: center;}}
+                    .footer a {{ color: #888; text-decoration: none; }}
+                    .footer a:hover {{ color: #fff; text-decoration: underline; }}
+                    
+                    /* Table Styles */
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                    td {{ padding: 10px 8px; border-bottom: 1px solid #3a2d4d; }}
+                    tr:last-child td {{ border-bottom: none; }}
+
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>Монітор живлення</h1>
-                    <div class="status">{status_text}</div>
-                    <div class="info">
-                        Тривалість стану: <b>{duration}</b><br>
-                        Останній сигнал: <b>{last_ping}</b>
+                    
+                    <div class="card status-card">
+                        <div class="title" style="text-align: center;">Поточний статус</div>
+                        <div class="value" style="color: {status_color};">{status_text}</div>
+                        <div class="status-text">
+                            Тривалість: <b>{duration}</b> | Останній сигнал: <b>{last_ping}</b>
+                        </div>
                     </div>
                     
-                    <h3 style="color: #BBB;">Сьогодні</h3>
-                    <img src="/chart.png" class="chart" alt="Графік за сьогодні">
-                    <div class="group">{group_name}</div>
+                    <div class="card">
+                        <div class="title">Графік за сьогодні ({group_name})</div>
+                        <img src="/chart.png?v={int(time.time())}" class="chart" alt="Графік за сьогодні">
+                    </div>
+                    
                     {analytics_html}
                     
                     {weekly_chart_html}
@@ -492,7 +590,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     <div class="footer">
                         Оновлено: {page_updated}<br>
-                        <a href="https://github.com/weby-homelab/light-monitor-kyiv" style="color: #666; text-decoration: none;">GitHub: light-monitor-kyiv</a>
+                        <a href="https://github.com/weby-homelab/light-monitor-kyiv" target="_blank">GitHub: light-monitor-kyiv</a>
                     </div>
                 </div>
                 <script>
@@ -511,7 +609,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # 1.5 Chart Image (Daily)
-        if parsed.path == "/chart.png":
+        if parsed.path.startswith("/chart.png"):
             chart_path = "web/chart.png"
             if os.path.exists(chart_path):
                 self.send_response(200)
@@ -607,23 +705,22 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     # Stats Block
                     msg += "📊 <b>Статистика відключення:</b>\n"
-                    msg += f"• Світла не було: {duration}\n"
+                    msg += f"• Світла не було: <b>{duration}</b>\n"
                     if dev_msg:
                         msg += f"{dev_msg}\n"
                     
                     # Schedule Block
                     msg += "\n🗓 <b>Аналіз:</b>\n"
-                    if sched_light_now is False: # Should be dark
-                        msg += f"• За графіком світло мало з'явитися о: <b>{current_end}</b>\n"
-                        # Extract the END time of the next light slot (when the next outage starts)
+                    
+                    sched_on_time = get_nearest_schedule_switch(current_time, True)
+                    if sched_on_time:
+                        msg += f"• За графіком світло мало з'явитися о: <b>{sched_on_time}</b>\n"
+                    
+                    if sched_light_now is False: # It appeared while it should be dark
                         next_off_time = next_range.split(' - ')[1] if ' - ' in next_range else "час очікується"
                         msg += f"• Наступне вимкнення: <b>{next_off_time}</b>"
-                    else:
-                        msg += f"• Зараз за графіком — <b>час зі світлом</b>\n"
-                        if next_duration:
-                            msg += f"• Наступне вимкнення: <b>{next_range} ({next_duration} год)</b>"
-                        else:
-                            msg += f"• Наступне вимкнення: <b>{current_end}</b>"
+                    else: # It appeared while it should be light
+                        msg += f"• Наступне вимкнення: <b>{current_end}</b>"
                     
                     threading.Thread(target=send_telegram, args=(msg,)).start()
                     trigger_daily_report_update()
@@ -675,20 +772,22 @@ def monitor_loop():
                 
                 # Stats Block
                 msg += "📊 <b>Статистика сесії:</b>\n"
-                msg += f"• Світло було: {duration}\n"
+                msg += f"• Світло було: <b>{duration}</b>\n"
                 if dev_msg:
                     msg += f"{dev_msg}\n"
                 
                 # Schedule Block
-                msg += "\n🗓 <b>Прогноз:</b>\n"
-                if sched_light_now is True: # Should be light
-                    # next_range describes the upcoming DARK slot (e.g. 13:00 - 20:00)
-                    # We want to know when light returns, which is the END of that slot (20:00)
+                msg += "\n🗓 <b>Аналіз:</b>\n"
+                
+                scheduled_off_time = get_nearest_schedule_switch(down_time_ts, False)
+                if scheduled_off_time:
+                     msg += f"• За графіком світло мало зникнути о: <b>{scheduled_off_time}</b>\n"
+                
+                if sched_light_now is True: # Should be light (but went down)
                     expected_return = next_range.split(' - ')[1] if ' - ' in next_range else "час очікується"
-                    msg += f"• Очікуємо за графіком о: <b>{expected_return}</b>\n"
-                    msg += f"• Аналіз: <b>За графіком світло мало бути до {current_end}</b>"
+                    msg += f"• Очікуємо увімкнення: <b>{expected_return}</b>"
                 else:
-                    msg += f"• Очікуємо за графіком о: <b>{current_end}</b>"
+                    msg += f"• Очікуємо увімкнення: <b>{current_end}</b>"
 
                 threading.Thread(target=send_telegram, args=(msg,)).start()
                 trigger_daily_report_update()
