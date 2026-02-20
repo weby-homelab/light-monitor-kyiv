@@ -155,9 +155,10 @@ def get_schedule_intervals(target_date, slots):
     return intervals
 
 def format_duration(seconds):
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    return f"{h}год {m}хв"
+    total_minutes = round(seconds / 60)
+    h = total_minutes // 60
+    m = total_minutes % 60
+    return f"{h} год {m} хв"
 
 def generate_chart(target_date, intervals, schedule_intervals):
     # Dark Mode - Deep Purple Background
@@ -267,23 +268,23 @@ def generate_chart(target_date, intervals, schedule_intervals):
         
     return filename, total_up, total_down
 
-def get_last_report_id():
+def get_last_report_id(target_date):
     if os.path.exists(REPORT_ID_FILE):
         try:
             with open(REPORT_ID_FILE, 'r') as f:
                 data = json.load(f)
-                # Check if the report ID is for today
-                if data.get('date') == datetime.datetime.now(KYIV_TZ).strftime("%Y-%m-%d"):
+                # Check if the report ID is for the target date
+                if data.get('date') == target_date.strftime("%Y-%m-%d"):
                     return data.get('message_id')
         except:
             pass
     return None
 
-def save_report_id(message_id):
+def save_report_id(message_id, target_date):
     try:
         with open(REPORT_ID_FILE, 'w') as f:
             json.dump({
-                'date': datetime.datetime.now(KYIV_TZ).strftime("%Y-%m-%d"),
+                'date': target_date.strftime("%Y-%m-%d"),
                 'message_id': message_id
             }, f)
     except:
@@ -318,7 +319,7 @@ def update_telegram_photo(message_id, photo_path, caption):
             print(f"Error updating report: {e}")
             return False
 
-def send_telegram_photo(photo_path, caption):
+def send_telegram_photo(photo_path, caption, target_date):
     url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
     with open(photo_path, 'rb') as f:
         files = {'photo': f}
@@ -330,7 +331,7 @@ def send_telegram_photo(photo_path, caption):
                 res = r.json()
                 if res.get('ok'):
                     msg_id = res['result']['message_id']
-                    save_report_id(msg_id)
+                    save_report_id(msg_id, target_date)
             else:
                 print(f"Failed to send report: {r.text}")
         except Exception as e:
@@ -404,7 +405,7 @@ if __name__ == "__main__":
                
     if "--no-send" not in sys.argv:
         # Check if we can update an existing message
-        last_id = get_last_report_id()
+        last_id = get_last_report_id(target_date)
         sent = False
         if last_id:
             print(f"Updating existing report (ID: {last_id})...")
@@ -412,7 +413,7 @@ if __name__ == "__main__":
         
         if not sent:
             print("Sending new report...")
-            send_telegram_photo(filename, caption)
+            send_telegram_photo(filename, caption, target_date)
     else:
         print("Telegram sending skipped (--no-send).")
     
