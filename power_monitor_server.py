@@ -381,6 +381,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == "/":
             self.send_response(200)
             self.send_header("Content-type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             
             with state_lock:
@@ -458,21 +461,21 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                                 base_text = "Світло з'явилося"
                                 if dur_sec:
                                     dur_str = format_duration(dur_sec)
-                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA;\'>(не було {dur_str})</span>"
+                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA; text-align: right; display: block;\'>(не було {dur_str})</span>"
                                 else:
                                     text = base_text
                             else:
                                 base_text = "Світло зникло"
                                 if dur_sec:
                                     dur_str = format_duration(dur_sec)
-                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA;\'>(було {dur_str})</span>"
+                                    text = f"{base_text}<br><span style=\'font-weight:normal; font-size: 0.9em; color: #AAA; text-align: right; display: block;\'>(було {dur_str})</span>"
                                 else:
                                     text = base_text
                             
                             rows += f"""
                             <tr>
-                                <td style="white-space: nowrap;">{dt_str}</td>
-                                <td style="color: {color}; font-weight: bold;">{icon} {text}</td>
+                                <td style="white-space: nowrap; text-align: left;">{dt_str}</td>
+                                <td style="color: {color}; font-weight: bold; text-align: left;">{icon} {text}</td>
                             </tr>
                             """
                         
@@ -540,7 +543,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         margin-bottom: 20px; 
                         box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                         text-align: left;
-                        border: 1px solid #1E122A;
+                        border: 1px solid #1E122A; /* Reverted border color */
                     }}
                     
                     .title {{ color: #aaa; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 600; }}
@@ -573,7 +576,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         <div class="title" style="text-align: center;">Поточний статус</div>
                         <div class="value" style="color: {status_color};">{status_text}</div>
                         <div class="status-text">
-                            Тривалість: <b>{duration}</b> | Останній сигнал: <b>{last_ping}</b>
+                            Тривалість: <b>{duration}</b><br>Останній сигнал: <b>{last_ping}</b>
                         </div>
                     </div>
                     
@@ -765,13 +768,13 @@ def monitor_loop():
                 sched_light_now, current_end, next_range, next_duration = get_schedule_context()
                 
                 time_str = datetime.datetime.fromtimestamp(down_time_ts, KYIV_TZ).strftime("%H:%M")
-                dev_msg = get_deviation_info(down_time_ts, False)
+                dev_msg = get_deviation_info(current_time, False)
                 
                 # Header
                 msg = f"🔴 <b>{time_str} Світло зникло!</b>\n\n"
                 
                 # Stats Block
-                msg += "📊 <b>Статистика сесії:</b>\n"
+                msg += "📊 <b>Статистика відключення:</b>\n"
                 msg += f"• Світло було: <b>{duration}</b>\n"
                 if dev_msg:
                     msg += f"{dev_msg}\n"
