@@ -11,4 +11,8 @@ power_push_url.txt
 .env
 event_log.json
 last_schedules.json
-message_ids.json
+message_ids.jsondaily_report_id.json
+web/chart.png
+web/stats.json
+web/weekly.png
+schedule_history.json

@@ -13,8 +13,8 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID")
 EVENT_LOG_FILE = "event_log.json"
 SCHEDULE_FILE = "last_schedules.json"
-HISTORY_FILE = "schedule_history.json"
-REPORT_ID_FILE = "daily_report_id.json"
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedule_history.json")
+REPORT_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "daily_report_id.json")
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 def load_events():
@@ -273,20 +273,52 @@ def get_last_report_id(target_date):
         try:
             with open(REPORT_ID_FILE, 'r') as f:
                 data = json.load(f)
-                # Check if the report ID is for the target date
-                if data.get('date') == target_date.strftime("%Y-%m-%d"):
-                    return data.get('message_id')
+                # Ensure data is a dictionary
+                if isinstance(data, dict):
+                    date_str = target_date.strftime("%Y-%m-%d")
+                    # Backwards compatibility: if old format, check and return
+                    if 'date' in data and 'message_id' in data:
+                         if data.get('date') == date_str:
+                             return data.get('message_id')
+                         else:
+                             return None
+                    # New format: a mapping of date_str -> message_id
+                    return data.get(date_str)
         except:
             pass
     return None
 
 def save_report_id(message_id, target_date):
+    data = {}
+    if os.path.exists(REPORT_ID_FILE):
+        try:
+            with open(REPORT_ID_FILE, 'r') as f:
+                loaded_data = json.load(f)
+                if isinstance(loaded_data, dict):
+                    # Migration: if old format, convert to new format
+                    if 'date' in loaded_data and 'message_id' in loaded_data:
+                        old_date = loaded_data['date']
+                        old_id = loaded_data['message_id']
+                        data[old_date] = old_id
+                    else:
+                        data = loaded_data
+        except:
+            pass
+            
+    date_str = target_date.strftime("%Y-%m-%d")
+    data[date_str] = message_id
+    
+    # Keep only the last 3 entries to avoid unbounded growth
+    if len(data) > 3:
+        # Sort by date and keep only the latest 3
+        sorted_keys = sorted(data.keys())
+        keys_to_remove = sorted_keys[:-3]
+        for k in keys_to_remove:
+            del data[k]
+            
     try:
         with open(REPORT_ID_FILE, 'w') as f:
-            json.dump({
-                'date': target_date.strftime("%Y-%m-%d"),
-                'message_id': message_id
-            }, f)
+            json.dump(data, f)
     except:
         pass
 
