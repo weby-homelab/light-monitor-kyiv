@@ -570,7 +570,10 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             </head>
             <body>
                 <div class="container">
-                    <h1>Монітор живлення</h1>
+                    <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    Монітор живлення
+                    <span id="audio-toggle" style="cursor:pointer; font-size:24px; opacity:0.5;" title="Увімкнути звукові сповіщення">🔕</span>
+                </h1>
                     
                     <div class="card status-card">
                         <div class="title" style="text-align: center;">Поточний статус</div>
@@ -597,6 +600,85 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     </div>
                 </div>
                 <script>
+                    let lastStatus = null;
+                    let audioCtx = null;
+                    let audioEnabled = false;
+
+                    const audioToggle = document.getElementById('audio-toggle');
+                    audioToggle.addEventListener('click', function() {
+                        if (!audioCtx) {
+                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+                        if (audioCtx.state === 'suspended') {
+                            audioCtx.resume();
+                        }
+                        audioEnabled = !audioEnabled;
+                        this.innerText = audioEnabled ? "🔔" : "🔕";
+                        this.style.opacity = audioEnabled ? "1" : "0.5";
+                        
+                        if (audioEnabled && "Notification" in window) {
+                            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                                Notification.requestPermission();
+                            }
+                        }
+                        
+                        if (audioEnabled) {
+                            playDing(); // test sound
+                        }
+                    });
+
+                    function playDing() {
+                        if (!audioCtx || !audioEnabled) return;
+                        if (audioCtx.state === 'suspended') audioCtx.resume();
+                        
+                        const osc = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+                        
+                        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                        
+                        osc.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    }
+
+                    function showNotification(title, body) {
+                        if (audioEnabled && "Notification" in window && Notification.permission === "granted") {
+                            new Notification(title, {
+                                body: body,
+                                icon: "/icon.svg",
+                                vibrate: [100, 50, 100]
+                            });
+                        }
+                    }
+
+                    function checkStatus() {
+                        // Extract current status from the DOM
+                        const statusVal = document.querySelector('.status-card .value').innerText;
+                        const currentStatus = statusVal.includes('СВІТЛО Є') ? 'up' : 'down';
+                        
+                        if (lastStatus && currentStatus !== lastStatus) {
+                            playDing();
+                            if (currentStatus === 'up') {
+                                showNotification("💡 Світло з'явилося!", "Електропостачання відновлено.");
+                            } else {
+                                showNotification("🔴 Світло зникло!", "Зафіксовано відключення.");
+                            }
+                        }
+                        lastStatus = currentStatus;
+                    }
+
+                    // Run check every few seconds
+                    setInterval(checkStatus, 5000);
+                    // Initial check after a short delay
+                    setTimeout(checkStatus, 2000);
+
                     if ('serviceWorker' in navigator) {{
                         window.addEventListener('load', () => {{
                             navigator.serviceWorker.register('/service-worker.js')
