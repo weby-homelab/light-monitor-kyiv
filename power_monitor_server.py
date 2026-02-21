@@ -600,34 +600,40 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     </div>
                 </div>
                 <script>
+
                     let lastStatus = null;
                     let audioCtx = null;
-                    let audioEnabled = false;
+                    let audioEnabled = localStorage.getItem('audioEnabled') === 'true';
 
                     const audioToggle = document.getElementById('audio-toggle');
-                    audioToggle.addEventListener('click', function() {
-                        if (!audioCtx) {
+                    if (audioEnabled) {{
+                        audioToggle.innerText = "🔔";
+                        audioToggle.style.opacity = "1";
+                    }}
+                    audioToggle.addEventListener('click', function() {{
+                        if (!audioCtx) {{
                             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        }
-                        if (audioCtx.state === 'suspended') {
+                        }}
+                        if (audioCtx.state === 'suspended') {{
                             audioCtx.resume();
-                        }
+                        }}
                         audioEnabled = !audioEnabled;
+                        localStorage.setItem('audioEnabled', audioEnabled);
                         this.innerText = audioEnabled ? "🔔" : "🔕";
                         this.style.opacity = audioEnabled ? "1" : "0.5";
                         
-                        if (audioEnabled && "Notification" in window) {
-                            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                        if (audioEnabled && "Notification" in window) {{
+                            if (Notification.permission !== "granted" && Notification.permission !== "denied") {{
                                 Notification.requestPermission();
-                            }
-                        }
+                            }}
+                        }}
                         
-                        if (audioEnabled) {
-                            playDing(); // test sound
-                        }
-                    });
+                        if (audioEnabled) {{
+                            playDing();
+                        }}
+                    }});
 
-                    function playDing() {
+                    function playDing() {{
                         if (!audioCtx || !audioEnabled) return;
                         if (audioCtx.state === 'suspended') audioCtx.resume();
                         
@@ -635,48 +641,72 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                         const gainNode = audioCtx.createGain();
                         
                         osc.type = 'sine';
-                        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-                        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+                        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
                         
-                        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                        gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
                         
                         osc.connect(gainNode);
                         gainNode.connect(audioCtx.destination);
                         
                         osc.start();
-                        osc.stop(audioCtx.currentTime + 0.3);
-                    }
+                        osc.stop(audioCtx.currentTime + 0.5);
+                    }}
 
-                    function showNotification(title, body) {
-                        if (audioEnabled && "Notification" in window && Notification.permission === "granted") {
-                            new Notification(title, {
+                    function showToast(title, body, type) {{
+                        const container = document.getElementById('toast-container');
+                        if (!container) return;
+                        
+                        const toast = document.createElement('div');
+                        toast.className = 'toast ' + (type === 'down' ? 'down' : 'up');
+                        
+                        const icon = type === 'up' ? '💡' : '🔴';
+                        
+                        toast.innerHTML = `
+                            <div class="toast-title"><span class="toast-icon">${{icon}}</span> ${{title}}</div>
+                            <div>${{body}}</div>
+                        `;
+                        
+                        container.appendChild(toast);
+                        
+                        void toast.offsetWidth;
+                        toast.classList.add('show');
+                        
+                        setTimeout(() => {{
+                            toast.classList.remove('show');
+                            setTimeout(() => toast.remove(), 300);
+                        }}, 5000);
+                    }}
+
+                    function showNotification(title, body) {{
+                        if (audioEnabled && "Notification" in window && Notification.permission === "granted") {{
+                            new Notification(title, {{
                                 body: body,
                                 icon: "/icon.svg",
                                 vibrate: [100, 50, 100]
-                            });
-                        }
-                    }
+                            }});
+                        }}
+                    }}
 
-                    function checkStatus() {
-                        // Extract current status from the DOM
+                    function checkStatus() {{
                         const statusVal = document.querySelector('.status-card .value').innerText;
                         const currentStatus = statusVal.includes('СВІТЛО Є') ? 'up' : 'down';
                         
-                        if (lastStatus && currentStatus !== lastStatus) {
+                        if (lastStatus && currentStatus !== lastStatus) {{
                             playDing();
-                            if (currentStatus === 'up') {
+                            if (currentStatus === 'up') {{
                                 showNotification("💡 Світло з'явилося!", "Електропостачання відновлено.");
-                            } else {
+                                showToast("Світло з'явилося!", "Електропостачання відновлено.", 'up');
+                            }} else {{
                                 showNotification("🔴 Світло зникло!", "Зафіксовано відключення.");
-                            }
-                        }
+                                showToast("Світло зникло!", "Зафіксовано відключення.", 'down');
+                            }}
+                        }}
                         lastStatus = currentStatus;
-                    }
+                    }}
 
-                    // Run check every few seconds
                     setInterval(checkStatus, 5000);
-                    // Initial check after a short delay
                     setTimeout(checkStatus, 2000);
 
                     if ('serviceWorker' in navigator) {{
@@ -686,6 +716,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                                 .catch(err => console.log('SW failed!', err));
                         }});
                     }}
+
                 </script>
             </body>
             </html>
