@@ -35,6 +35,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Fill TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 chmod +x run.sh && ./run.sh
+```
 
 ---
 
