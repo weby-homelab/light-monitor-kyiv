@@ -596,7 +596,8 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     <div class="footer">
                         Оновлено: {page_updated}<br>
-                        <a href="https://github.com/weby-homelab/light-monitor-kyiv" target="_blank">GitHub: light-monitor-kyiv</a>
+                        © 2026 Weby Homelab<br>
+                        Built to survive 12h+ blackouts & grid attacks since 2022
                     </div>
                 </div>
                 <script>
