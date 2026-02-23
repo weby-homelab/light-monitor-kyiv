@@ -1,11 +1,13 @@
-```markdown
-   <!-- ENGLISH VERSION -->
-   <div align="center">
-     <a href="README_ENG.md">🇬🇧 English README</a> • 
-     <a href="README.md">🇺🇦 Українська версія</a>
-   </div>
+<p align="center">
+  <a href="README_ENG.md">
+    <img src="https://img.shields.io/badge/🇬🇧_English-00D4FF?style=for-the-badge&logo=readme&logoColor=white" alt="English README">
+  </a>
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/🇺🇦_Українська-FF4D00?style=for-the-badge&logo=readme&logoColor=white" alt="Українська версія">
+  </a>
+</p>
 
-   <br>
+<br>
 # 📊 Light Monitor Kyiv (v1.2.1)
 **Інтелектуальна аналітика електромережі для вашої HomeLab.**
 
