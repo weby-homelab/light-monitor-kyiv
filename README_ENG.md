@@ -9,60 +9,89 @@
 
 <br>
 
-# Weby Homelab • light-monitor-kyiv
+# 📊 Light Monitor Kyiv (v1.2.1)
+**Intelligent power grid analytics for your HomeLab.**
 
-**Resilient power outage monitoring from Kyiv that actually works during 12-hour blackouts**
+[![Status](https://img.shields.io/badge/Status-Stable-success?style=flat-square)]()
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/Platform-Bare--Metal-orange?style=flat-square)](https://ubuntu.com/)
 
-[![GitHub stars](https://img.shields.io/github/stars/weby-homelab/light-monitor-kyiv)](https://github.com/weby-homelab/light-monitor-kyiv/stargazers)
-[![License](https://img.shields.io/github/license/weby-homelab/light-monitor-kyiv)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10+-3670A0?logo=python&logoColor=ffdd54)
-![PWA](https://img.shields.io/badge/PWA-Ready-00D4FF)
+---
 
-### Built for real war-time resilience in Kyiv since 2022
-- **99.98% uptime** on Raspberry Pi with 18650 battery during blackouts
-- Real-time comparison: **Yasno/DTEK schedule vs actual power**
-- Beautiful **Dark Mode PWA** that works **offline**
-- Telegram alerts + weekly accuracy reports (**currently 94.7%**)
-- Zero database — only JSON, super lightweight
+## 🔍 Overview
 
-![Live dashboard](docs/screenshots/dashboard.png)
-![Telegram alert](docs/screenshots/telegram-alert.png)
-![Weekly report](docs/screenshots/weekly.png)
+**Light Monitor Kyiv** is a specialized tool for deep analysis of power grid stability. Unlike simple notifiers, this system focuses on comparing real-world events with official schedules and generating detailed infographics.
 
-### Why this is different
-Most "light monitors" just say "power is on/off".  
-**light-monitor-kyiv** is a full analytical homelab tool:
-- Tracks schedule adherence over time
-- Builds beautiful graphs even without internet
-- Predicts return of power with ±9 minutes accuracy
-- Survives total power loss for hours
+The project is ideal for deployment on low-power hardware (Raspberry Pi, old laptops, VPS) as it is written in pure Python with minimal dependencies.
 
-### Quick install (5 minutes)
+---
+
+## 🚀 Key Features
+
+- **📊 "Plan vs Fact" Analytics:** Automatic detection of deviations from official DTEK/Yasno schedules.
+- **⏱️ Surgical Precision:** Recording events with second-level accuracy and calculating "delay" or "early restoration" times.
+- **📈 Visualization:** Generation of daily and weekly reports in Dark Mode for Telegram and Web.
+- **📱 Web Dashboard:** A lightweight web panel for real-time status monitoring.
+
+---
+
+## 🏗 How It Works
+
+The system consists of a server (this project) and external sensors.
+
+```mermaid
+graph LR
+    subgraph Sensors ["📡 SENSORS (External)"]
+        Router["🏠 <b>Router / ESP32</b><br/>(Sends Heartbeat)"]
+    end
+
+    subgraph Core ["🧠 CORE ENGINE (Bare-Metal)"]
+        API["🧪 <b>Python Server</b><br/>(Listens for requests)"]
+        Parser["🕷️ <b>Analyzer</b><br/>(Parses schedules)"]
+        Viz["🎨 <b>Matplotlib</b><br/>(Renders reports)"]
+    end
+
+    subgraph Notify ["🔔 CHANNELS"]
+        TG["✈️ Telegram Bot"]
+        Web["🌐 Web Panel"]
+    end
+
+    Router -- "HTTP Push" --> API
+    API --> Parser
+    Parser --> Viz
+    Viz --> TG
+    Viz --> Web
+```
+
+*Note: Your router or IoT device should be configured to send a simple HTTP request to the server whenever power is available.*
+
+---
+
+## 📦 Installation (Bare-Metal)
+
+This project is designed for direct installation on Linux (Ubuntu/Debian).
+
+### 1. Setup
 ```bash
 git clone https://github.com/weby-homelab/light-monitor-kyiv.git
 cd light-monitor-kyiv
-python -m venv venv && source venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# Fill TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
-chmod +x run.sh && ./run.sh
 ```
 
----
+### 2. Configuration
+Configure your `.env` file (bot token and channel ID) and `config.json` (your power outage group).
 
-Tech stack
-
-Python 3.10+ (AsyncIO)
-Matplotlib + Plotly
-Telegram Bot API
-Vanilla JS PWA (works offline)
-Tested on Raspberry Pi 4 + old laptop
-
-Star ⭐ if your homelab also survives Ukrainian blackouts
-Issues and PRs are very welcome — especially from Ukrainian developers!
+### 3. Automation
+For stable operation, set up the system service (`power_monitor.service`) and add Cron tasks for regular chart updates (see `INSTRUCTIONS.md`).
 
 ---
 
-Made with ❤️ in Kyiv under air raid sirens
-Weby Homelab — infrastructure that doesn’t give up.
-text
+## 📜 License
+Distributed under the **MIT** License.
+
+<p align="center">
+  © 2026 Weby Homelab — infrastructure that doesn’t give up.<br>
+  Made with ❤️ in Kyiv under air raid sirens and blackouts...
+</p>
