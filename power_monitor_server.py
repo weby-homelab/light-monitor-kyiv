@@ -786,6 +786,22 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(b"User-agent: *\nAllow: /")
             return
 
+        # 5. Provide JSON data for external services (like flash-monitor-kyiv)
+        if parsed.path in ["/last_schedules.json", "/schedule_history.json"]:
+            file_path = parsed.path.lstrip("/")
+            if os.path.exists(file_path):
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(file_path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b'{"error": "file not found"}')
+            return
+
         # 2. Push API
         if parsed.path == f"/api/push/{state['secret_key']}":
             self.send_response(200)
