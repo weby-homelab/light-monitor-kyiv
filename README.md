@@ -1,3 +1,14 @@
+```markdown
+   <!-- ENGLISH VERSION -->
+   <div align="center">
+     <a href="README_ENG.md">🇬🇧 English README</a> • 
+     <a href="README.md">🇺🇦 Українська версія</a>
+   </div>
+
+   <br>
+```
+
+
 # 📊 Light Monitor Kyiv (v1.2.1)
 **Інтелектуальна аналітика електромережі для вашої HomeLab.**
 
