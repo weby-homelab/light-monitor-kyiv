@@ -35,3 +35,22 @@ pip install -r requirements.txt
 cp .env.example .env
 # Fill TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 chmod +x run.sh && ./run.sh
+
+---
+
+Tech stack
+
+Python 3.10+ (AsyncIO)
+Matplotlib + Plotly
+Telegram Bot API
+Vanilla JS PWA (works offline)
+Tested on Raspberry Pi 4 + old laptop
+
+Star ⭐ if your homelab also survives Ukrainian blackouts
+Issues and PRs are very welcome — especially from Ukrainian developers!
+
+---
+
+Made with ❤️ in Kyiv under air raid sirens
+Weby Homelab — infrastructure that doesn’t give up.
+text
