@@ -596,8 +596,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     <div class="footer">
                         Оновлено: {page_updated}<br>
-                        © 2026 Weby Homelab<br>
-                        Built to survive 12h+ blackouts & grid attacks since 2022
+                        © 2026 <a href="https://github.com/weby-homelab/light-monitor-kyiv" target="_blank" style="color: inherit; text-decoration: none;">Weby Homelab</a>. Made with ❤️ in Kyiv under air raid sirens and blackouts
                     </div>
                 </div>
                 <script>
